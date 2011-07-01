@@ -50,7 +50,7 @@
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 
-char *RECEIVE_SERVER = "18.125.2.7";
+char *RECEIVE_SERVER = "10.0.0.1";
 int RECEIVE_PORT = 2410;
 
 int debug = 0;
