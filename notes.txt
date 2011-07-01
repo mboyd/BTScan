@@ -1,0 +1,5 @@
+inorder to run this setup you need the following modules
+
+python-matplotlib
+python-numpy
+

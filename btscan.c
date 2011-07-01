@@ -27,7 +27,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/poll.h>
-#include <sys/socket.h>
 #include <stdlib.h>
 #include <time.h>
 #include <getopt.h>
@@ -38,19 +37,37 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <sys/time.h>
+
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 
+char *RECEIVE_SERVER = "18.125.2.7";
+int RECEIVE_PORT = 2410;
+
 int debug = 0;
 
-// file descriptor for named pipe
-FILE * fd = 0;
+int sock;
+struct sockaddr_in srv_addr;
+unsigned char mac_address[6];
 
 #define POLL_TIMEOUT 11000
 #define MAX_DELAY    2000
 
-#define FIFO_NAME "/tmp/btscan"
+struct status_packet {
+  struct timeval timestamp;
+  uint8_t host_mac_addr[6];
+  uint8_t device_bt_addr[6];
+  int8_t rssi;
+};
 
 void usage(char *name)
 {
@@ -70,19 +87,19 @@ static void sig_term(int sig)
   __io_canceled = 1;
 }
 
-static void show_inquiry_result(bdaddr_t *bdaddr, int rssi)
+static void show_inquiry_result(bdaddr_t *bdaddr, int8_t rssi)
 {
-  char addr[18];
-  ba2str(bdaddr, addr);
-
-  fprintf(fd,"%18s|", addr);
-
-  if (rssi == INT_MIN)
-	  fprintf(fd,"%4c\n",'?');
-  else
-	  fprintf(fd,"%4d\n",rssi);
-
-  fflush(fd);
+  struct status_packet pkt;
+  
+  memcpy(pkt.host_mac_addr, mac_address, sizeof(pkt.host_mac_addr));
+  memcpy(pkt.device_bt_addr, bdaddr, sizeof(bdaddr));
+  gettimeofday(&pkt.timestamp, NULL);
+  
+  pkt.rssi = rssi;    // If no rssi available, this becomes INT_MIN
+  
+  sendto(sock, (void *)(&pkt), sizeof(pkt), 0, (const struct sockaddr *)&srv_addr, sizeof(pkt));
+  
+  fprintf(stderr, ".");
 }
 
 static void inquiry_result(int dd, unsigned char *buf, int len)
@@ -96,7 +113,7 @@ static void inquiry_result(int dd, unsigned char *buf, int len)
 
   for (i = 0; i < num; i++) {
     info = (void *) buf + (sizeof(*info) * i) + 1;
-    show_inquiry_result(&info->bdaddr, INT_MIN);
+    //show_inquiry_result(&info->bdaddr, INT_MIN);  // Surpress results w/o rssi
   }
 }
 
@@ -173,12 +190,6 @@ int main(int argc, char *argv[])
   int c;
   extern char *optarg;
   extern int optind;
-  
-
-  // Ok let's print the PID FIRST 
-  printf("%d\n", getpid());
-  fflush ( stdout );
-  fclose(stdout);
 
   /* Process command-line options */
   while ((c = getopt(argc, argv, "i:")) != EOF)
@@ -220,14 +231,45 @@ int main(int argc, char *argv[])
     perror("Can't set HCI filter");
     exit(1);
   }
+  
+  /* open socket */
+  fprintf(stderr, "Opening socket\n");
+  fprintf(stderr, "Sizeof status_packet = %li \n", sizeof(struct status_packet));
+  fprintf(stderr, "Sizeof timeval = %li \n", sizeof(struct timeval));
+  sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  memset(&srv_addr, 0, sizeof(srv_addr));
+  srv_addr.sin_family = AF_INET;
+  srv_addr.sin_addr.s_addr = inet_addr(RECEIVE_SERVER);
+  srv_addr.sin_port = htons(RECEIVE_PORT);
+  
+  /* Get the host mac addr, shamelessly ripped from stackoverflow */
+  struct ifreq ifr;
+  struct ifconf ifc;
+  char tmp[1024];
+  int success = 0;
 
-  /*setup named pipe */
-  mknod(FIFO_NAME, S_IFIFO | 0666, 0);
-  //printf("Created  pipe\n");
+  int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+  if (sock == -1) { /* handle error*/ };
 
-  /* open named pipe for writing */
-  fd = fopen(FIFO_NAME, "w");
-  //printf("Opened pipe\n");
+  ifc.ifc_len = sizeof(tmp);
+  ifc.ifc_buf = tmp;
+  if (ioctl(sock, SIOCGIFCONF, &ifc) == -1) { /* handle error */ }
+
+  struct ifreq* it = ifc.ifc_req;
+  struct ifreq* end = it + (ifc.ifc_len / sizeof(struct ifreq));
+
+  for (; it != end; ++it) {
+    strcpy(ifr.ifr_name, it->ifr_name);
+    if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
+      if (! (ifr.ifr_flags & IFF_LOOPBACK)) { // don't count loopback
+        if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
+          success = 1;
+          break;
+        }
+      }
+    } else { /* handle error */ }
+  }
+  memcpy(mac_address, ifr.ifr_hwaddr.sa_data, 6);
 
   /* Set up signal handlers */
   memset(&sa, 0, sizeof(sa));
@@ -301,9 +343,6 @@ int main(int argc, char *argv[])
 
   cancel_inquiry(dd);
  
-  /* close pipe */
-  fclose(fd);
-
   if (hci_close_dev(dd) < 0) {
     perror("Can't close HCI device");
     exit(1);

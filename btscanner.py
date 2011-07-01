@@ -1,25 +1,5 @@
-#
-# Remote scanner is a python app that listens for Bluetooth Events
-# in a manner similar to udpsend.rb from the Nokia Code
-#
-# 
-#  
-#
-#
-import sys
+import sys,os,random,time,popen2,copy,string,MySQLdb,fcntl,socket,struct,commands,re
 sys.path.append('.')
-import os
-import random
-import time
-import popen2
-import copy
-import string
-import MySQLdb
-import fcntl
-import socket
-import struct
-import commands
-
 
 #
 # scanners:
@@ -37,7 +17,6 @@ def getHwAddr(ifname):
 hwaddr = getHwAddr('eth1') 
 
 
-
 class BTMonitor:
   # class to monitor BT on a device
   def __init__(self, scanner_path = SCANNER_PATH, scanner_pipe = SCANNER_PIPE):
@@ -48,13 +27,14 @@ class BTMonitor:
     
   def start(self):
     #open database connection
-    self.db = MySQLdb.connect("localhost","user","gpuuser","bluetooth1")
+    self.db = MySQLdb.connect("localhost", "user", "gpuuser", "bluetooth1")
 
     #prepare a cursor object
     self.cursor =self.db.cursor()
-   
 
-    # this is UDP send (the reader)
+    #prepare regular expression
+    self.capture_re = re.compile('\s*(?P<bt_addr>(\w\w:?){6})\s*\|\s*(?P<rssi>-?\d*)')
+   
     r, w = popen2.popen2(self.scanner_path)
     ret = r.readline()
     res = ret.rstrip('\n')  # may need to change for windows
@@ -88,39 +68,30 @@ class BTMonitor:
     except OSError:
       pass
 
-  def process_line(self,data):
-    line =  (data,time.time())
-    line = str(line).strip('[]')
-    if line == "\n":
-      pass
-    elif line == "":
-      pass
-    else:
-      line = [i.strip('[]\n') for i in line.split(',')]
-      newline = self.process(line[0])
-      rssi = int(newline[1])
-      timestr = line[1].strip()
-      timestr = timestr.strip(')')
-      timef = float(timestr)
-      newline[0] = newline[0].strip('(').strip("'").strip()
-      data = (newline[0],rssi,timef,hwaddr)
-      print data
-      SQL = "INSERT INTO bluetoothTb1 (bdaddr,rssi,time,hwaddr) Values('%s','%d','%d','%s')"  % (data[0],data[1],data[2],data[3])
-                
-      try:
+  def process_line(self, data):
+             
+    m = self.capture_re.search(data)
+    bt_addr = m.group('bt_addr')
+    rssi = m.group('rssi')
+    
+    if not bt_addr or not rssi:
+      print 'Unable to match line: ' + data
+      return
+    if bt_addr != "00:1D:6E:D9:59:E0":
+        return
+    print (bt_addr,rssi,time.time(),hwaddr)
+    
+    SQL = "INSERT INTO bluetoothTb1 (bdaddr,rssi,time,hwaddr) Values('%s','%s','%d','%s')"  % (bt_addr,rssi,time.time(),hwaddr)
+                    
+    try:
       #execute SQL command
         self.cursor.execute(SQL)
       #commit changes to database
         self.db.commit()
-      except:
+    except:
       #rollback in case of error
         self.db.rollback()
         print "fail"
-
-  def process(self,line):
-    newline = line.split('|')
-    newline = [i.strip("/n\'\\ ") for i in newline]
-    return newline
 
 
 #

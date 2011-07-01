@@ -23,5 +23,3 @@ for hw_addr in d.keys():
             of.write(time+','+rssi+"\n")
         of.close()
         i += 1
-        
-        capture_re = re.compile('\s*(?P<hw_addr>(\w\w:?){6})\s*\|\s*(?P<rssi>-?\d*)')
