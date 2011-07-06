@@ -5,6 +5,7 @@ import tkFileDialog
 import tkSimpleDialog
 from PIL import Image,ImageTk
 import Queue
+import random
 
 class App:
  
@@ -17,18 +18,25 @@ class App:
 
         self.MainMenu()
         self.SideFrame()
+        self.trackingarea = None
         
         self.evt_queue = Queue.Queue()
         self.root.after(100, self.check_queue)
     
     def check_queue(self):
+        self.tracker()
         try:
             dev_id = self.evt_queue.get_nowait()
             print 'New device detected: %s' % dev_id
         except Queue.Empty:
             pass
         self.root.after(100, self.check_queue)
-        
+
+    def randomlocation(self):
+	x =  random.uniform(0,20)
+        y =  random.uniform(0,20)
+        return (x,y)
+       
     
     def mainloop(self):
         self.root.mainloop()
@@ -105,6 +113,16 @@ class App:
         self.trackingarea.pack(fill=BOTH, expand=1)
         
         
+    #draws location points
+    def tracker(self):
+        if not self.trackingarea:
+            return
+        xloc,yloc = self.randomlocation()
+        widthadj = self.image.size[0]/self.dimensions[1]
+        heightadj = self.image.size[1]/self.dimensions[2]
+        self.trackingarea.create_rectangle(xloc*widthadj-5,yloc*heightadj-5,xloc*widthadj+5,yloc*heightadj+5,fill="red")
+        self.trackingarea.pack()
+        
         
         
         
@@ -132,8 +150,8 @@ class MapOptions(tkSimpleDialog.Dialog):
 
     def apply(self):
         name = (self.e1.get())
-        width = int(self.e2.get())
-        height = int(self.e3.get())
+        width = float(self.e2.get())
+        height = float(self.e3.get())
         self.result = [name,width,height]
         
         

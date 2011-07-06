@@ -1,0 +1,6 @@
+import random
+
+def randomlocation(trackingdata):
+	x =  random.uniform(0,20)
+        y =  random.uniform(0,20)
+        return (x,y)
