@@ -40,6 +40,7 @@
 #include <sys/time.h>
 
 #include <sys/socket.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -49,9 +50,6 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
-
-char *RECEIVE_SERVER = "10.0.0.1";
-int RECEIVE_PORT = 2410;
 
 int debug = 0;
 
@@ -71,7 +69,7 @@ struct status_packet {
 
 void usage(char *name)
 {
-  fprintf(stderr,"Usage: %s [-i hci-if]\n",name);
+  fprintf(stderr,"Usage: %s -h <host> [-p port (default 2410)] [-i hci-if]\n",name);
   exit(2);
 }
 
@@ -183,6 +181,8 @@ int main(int argc, char *argv[])
   unsigned char buf[HCI_MAX_EVENT_SIZE], *ptr;
   hci_event_hdr *hdr;
   struct hci_filter flt;
+  char *srv_name = "";
+  int srv_port = 2410;
   struct sigaction sa;
   struct pollfd p;
   int dd = -1, dev = 0, len;
@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
   extern int optind;
 
   /* Process command-line options */
-  while ((c = getopt(argc, argv, "i:")) != EOF)
+  while ((c = getopt(argc, argv, "h:p:i:")) != EOF)
   {
     switch(c)
     {
@@ -203,11 +203,20 @@ int main(int argc, char *argv[])
           exit(1);
         }
         break;
+      case 'h':
+        srv_name = optarg;
+        break;
+      case 'p':
+        srv_port = atoi(optarg);
+        break;
       case '?':
         errflg++;
         break;
     }
   }
+  
+  if (!strcmp(srv_name, ""))
+    errflg++;
 
   if (errflg)
     usage(argv[0]);
@@ -233,14 +242,22 @@ int main(int argc, char *argv[])
   }
   
   /* open socket */
-  fprintf(stderr, "Opening socket\n");
-  fprintf(stderr, "Sizeof status_packet = %li \n", sizeof(struct status_packet));
-  fprintf(stderr, "Sizeof timeval = %li \n", sizeof(struct timeval));
   sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
   memset(&srv_addr, 0, sizeof(srv_addr));
   srv_addr.sin_family = AF_INET;
-  srv_addr.sin_addr.s_addr = inet_addr(RECEIVE_SERVER);
-  srv_addr.sin_port = htons(RECEIVE_PORT);
+  srv_addr.sin_port = htons(srv_port);
+  
+  struct hostent *result = gethostbyname(srv_name);
+  if (!result) {
+    perror("DNS lookup failed");
+    exit(1);
+  }
+  
+  memcpy(&srv_addr.sin_addr.s_addr, result->h_addr, result->h_length);
+  
+  char addr[16];
+  inet_ntop(AF_INET, &srv_addr.sin_addr.s_addr, addr, 16);
+  fprintf(stderr, "Sending to %s:%d ", addr, srv_port);
   
   /* Get the host mac addr, shamelessly ripped from stackoverflow */
   struct ifreq ifr;
@@ -249,7 +266,10 @@ int main(int argc, char *argv[])
   int success = 0;
 
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-  if (sock == -1) { /* handle error*/ };
+  if (sock == -1) {
+    perror("Unable to open socket");
+    exit(1);
+  };
 
   ifc.ifc_len = sizeof(tmp);
   ifc.ifc_buf = tmp;
@@ -338,6 +358,8 @@ int main(int argc, char *argv[])
       }
     }
   }
+  
+  printf("\n");
 
   if (debug) fprintf(stderr,"Program finished.\n");
 

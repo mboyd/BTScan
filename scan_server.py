@@ -5,7 +5,7 @@ PORT = 2410
 MSG_MAX_LEN = 128
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(('18.125.2.7', PORT))
+sock.bind(('0.0.0.0', PORT))
 
 def decode_packet(data):
     try:
