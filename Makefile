@@ -1,4 +1,4 @@
-all: btscan btscan-mips
+all: btscan
 
 btscan: btscan.c
 	gcc -Wall -O -o btscan btscan.c -lbluetooth
