@@ -4,6 +4,7 @@ import tkColorChooser
 import tkFileDialog
 import tkSimpleDialog
 from PIL import Image,ImageTk
+import Queue
 
 class App:
  
@@ -17,7 +18,19 @@ class App:
         self.MainMenu()
         self.SideFrame()
         
-
+        self.evt_queue = Queue.Queue()
+        self.root.after(100, self.check_queue)
+    
+    def check_queue(self):
+        try:
+            dev_id = self.evt_queue.get_nowait()
+            print 'New device detected: %s' % dev_id
+        except Queue.Empty:
+            pass
+        self.root.after(100, self.check_queue)
+        
+    
+    def mainloop(self):
         self.root.mainloop()
         
 
@@ -125,5 +138,9 @@ class MapOptions(tkSimpleDialog.Dialog):
         
         
 
-   
-App()
+if __name__ == '__main__':
+    import scan_server
+    s = scan_server.ScanServer()
+    a = App()
+    s.add_new_device_callback(lambda dev: a.evt_queue.put(dev))
+    a.mainloop()
