@@ -16,16 +16,17 @@ class App:
 
         self.frame = Frame(self.root,width=800,height=800)
         self.frame.pack()
-
+        
+       
         self.MainMenu()
         self.SideFrame()
-        self.trackingarea = None
+        self.MainCanvas()
+        self.device_list = []
         self.bcolor = "red"  #color of tracking dots
         
         self.position_data = dict() 
         self.Hlength = 5  #length of visible tracking history
-        self.track = None
-        
+                
         self.evt_queue = Queue.Queue()
         self.root.after(100, self.check_queue)
     
@@ -43,9 +44,12 @@ class App:
     
     def handle_new_device(self, device_mac):
         print 'New device detected: %s' % device_mac
-        self.position_data[device_map] = deque([])
+        self.position_data[device_mac] = deque([])
+        self.add_device(device_mac)
     
     def handle_new_position(self, device, pos):
+        if not device in self.position_data:
+            self.handle_new_device(device)
         print 'Position update for device %s: now at %s' % (device, str(pos))
         pos_buf = self.position_data[device]
         pos_buf.append(pos)
@@ -74,38 +78,42 @@ class App:
 
     #create and resize canvas area for maps
     def MainCanvas(self):
-        self.trackingarea = Canvas(self.frame, bg="white",width=self.image.size[0],height=self.image.size[1])
+        self.trackingarea = Canvas(self.frame, bg="white",width=600,height=400)
         self.trackingarea.pack(anchor=NW)
 
     def SideFrame(self):
-
-        def mk_button_handler(button):
-            def handle():
-                self.result=tkColorChooser.askcolor()
-                self.bcolor=self.result[1]
-                button.config(bg=self.result[1])
-            return handle
-        
+       
         self.sideframe = Frame(self.frame,width=100,height=400)
         self.sideframe.pack(side=RIGHT,expand=1,fill=BOTH)
         Label(self.sideframe, text="track").grid(row=0,column=0)
         Label(self.sideframe, text="BD_ADDR").grid(row=0,column=1)
         Label(self.sideframe, text="#_RCVR").grid(row=0,column=2)
         Label(self.sideframe, text="color").grid(row=0,column=3)
-        
-        self.device_list = []
-        
-        self.var1 = IntVar()
-        self.c1 = Checkbutton(self.sideframe,variable=self.var1,command=self.cb).grid(row=1,column=0)
-        Label(self.sideframe, text="track").grid(row=1,column=1)
-        Label(self.sideframe, text="BD_ADDR").grid(row=1,column=2)
-        b1 = Button(self.sideframe,text="color")
-        b1.config(command=mk_button_handler(b1))
-        b1.grid(row=1,column=3)
 
-    #keep track of tracking enabled
-    def cb(self):
-        self.track = self.var1.get()
+    def add_device(self,device_mac):
+                    
+        def mk_button_handler(button,color):
+            def handle():
+                result=tkColorChooser.askcolor()
+                color[:] = list(result[1])
+                button.config(bg=result[1])
+            return handle
+
+        row = len(self.device_list)+1
+   
+        checkbox_state = IntVar()
+        checkbox = Checkbutton(self.sideframe,variable=checkbox_state).grid(row=row,column=0)
+        L1 = Label(self.sideframe, text=device_mac)
+        L1.grid(row=row,column=1)
+        L2 = Label(self.sideframe, text="#")
+        L2.grid(row=row,column=2)
+        color = list('red')
+        colorbutton = Button(self.sideframe,text="color")
+        colorbutton.config(command=mk_button_handler(colorbutton,color))
+        colorbutton.grid(row=row,column=3)
+
+        self.device_list.append((device_mac,checkbox_state,color,(checkbox,L1,L2,colorbutton)))
+
 
 
 
@@ -125,31 +133,44 @@ class App:
             return
         self.image = Image.open(img_name)
         self.map = ImageTk.PhotoImage(self.image)
-        optwindow = MapOptions(self.root)
-        if not optwindow.val:
+        optwindow = MapOptions(self.root, self.map_loaded)
+
+    def map_loaded(self, map_dialog):
+        
+        if not map_dialog.val:
             return
-        self.dimensions = optwindow.result
-        self.MainCanvas()
-        self.trackingarea.create_image(0,0, anchor=NW, image = self.map)
+
+        name = (map_dialog.e1.get())
+        width = float(map_dialog.e2.get())
+        height = float(map_dialog.e3.get())
+        self.dimensions = (name,width,height)
+        
+        self.trackingarea.config(width=self.image.size[0],height=self.image.size[1])
+        self.trackingarea.delete("map")
+        self.trackingarea.create_image(0,0, anchor=NW, image = self.map, tag="map")
         self.trackingarea.pack(fill=BOTH, expand=1)
         
         
     def plot_positions(self):
-        if not self.trackingarea:
+        if not self.trackingarea.find_withtag("map"):
             return
         self.trackingarea.delete("loc")
-        if not self.track:
-            return
-        xloc,yloc = self.randomlocation()
         widthadj = self.image.size[0]/self.dimensions[1]
         heightadj = self.image.size[1]/self.dimensions[2]
-        xcoordloc = xloc*widthadj
-        ycoordloc = yloc*heightadj
+        
+       
+        for device_mac,checkbox_state,color,gui in self.device_list:
+            if checkbox_state.get() == 0:
+                continue
 
-        for device, pos_buf in self.position_data.items():
+            pos_buf = self.position_data[device_mac]
+
             for (x, y) in pos_buf:
-                    self.trackingarea.create_rectangle(x-5, y-5, x+5, y+5, \
-                                                fill=self.bcolor, tags="loc") 
+                xloc = x*widthadj
+                yloc = y*heightadj
+                c = ''.join(color)
+                self.trackingarea.create_rectangle(xloc-5, yloc-5, xloc+5, yloc+5, \
+                                                fill=c, tags="loc") 
         self.trackingarea.pack()
         
         
@@ -157,6 +178,10 @@ class App:
         
 #file options dialog to define map dimensions
 class MapOptions(tkSimpleDialog.Dialog):
+
+    def __init__(self, parent, callback):
+        self.callback = callback
+        tkSimpleDialog.Dialog.__init__(self, parent)
     
     def body(self,master):
         Label(master, text="Name:").grid(row=0)
@@ -178,10 +203,7 @@ class MapOptions(tkSimpleDialog.Dialog):
         return 1
 
     def apply(self):
-        name = (self.e1.get())
-        width = float(self.e2.get())
-        height = float(self.e3.get())
-        self.result = [name,width,height]
+        self.callback(self)
         
         
 
