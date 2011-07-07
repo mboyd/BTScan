@@ -6,6 +6,7 @@ import tkSimpleDialog
 from PIL import Image,ImageTk
 import Queue
 import random
+from collections import deque
 
 class App:
  
@@ -19,6 +20,10 @@ class App:
         self.MainMenu()
         self.SideFrame()
         self.trackingarea = None
+        self.bcolor = "red"  #color of tracking dots
+        self.tag_buffer = deque([]) #data buffer for tracking 
+        self.Hlength = 5  #length of visible tracking history
+        self.track = None
         
         self.evt_queue = Queue.Queue()
         self.root.after(100, self.check_queue)
@@ -30,7 +35,7 @@ class App:
             print 'New device detected: %s' % dev_id
         except Queue.Empty:
             pass
-        self.root.after(100, self.check_queue)
+        self.root.after(10, self.check_queue)
 
     def randomlocation(self):
 	x =  random.uniform(0,20)
@@ -51,6 +56,7 @@ class App:
         filemenu = Menu(menubar)
         menubar.add_cascade(label="file", menu=filemenu)
         filemenu.add_command(label="load map",command=self.Load_Map)
+        filemenu.add_command(label="History",command=self.History)
         filemenu.add_separator()
         filemenu.add_command(label="Exit",command=self.Close)
 
@@ -64,8 +70,9 @@ class App:
 
         def mk_button_handler(button):
             def handle():
-                result=tkColorChooser.askcolor()
-                button.config(bg=result[1])
+                self.result=tkColorChooser.askcolor()
+                self.bcolor=self.result[1]
+                button.config(bg=self.result[1])
             return handle
         
         self.sideframe = Frame(self.frame,width=100,height=400)
@@ -77,25 +84,28 @@ class App:
         
         self.device_list = []
         
-        var1 = IntVar()
-        c1 = Checkbutton(self.sideframe,variable=var1).grid(row=1,column=0)
+        self.var1 = IntVar()
+        self.c1 = Checkbutton(self.sideframe,variable=self.var1,command=self.cb).grid(row=1,column=0)
         Label(self.sideframe, text="track").grid(row=1,column=1)
         Label(self.sideframe, text="BD_ADDR").grid(row=1,column=2)
         b1 = Button(self.sideframe,text="color")
         b1.config(command=mk_button_handler(b1))
         b1.grid(row=1,column=3)
 
-        
-        
-      
-    def Color_Choose():
-        pass
+    #keep track of tracking enabled
+    def cb(self):
+        self.track = self.var1.get()
+
 
 
     #handle application closing
     def Close(self):
         if tkMessageBox.askokcancel("Quit","Do you really wish to quit?"):
             self.root.destroy()
+    
+    def History(self):
+        length =  tkSimpleDialog.askinteger("Tracking History","Please input the history length",parent=self.root,minvalue=0,maxvalue=100,initialvalue=5)
+        self.Hlength = length
 
     #handle opening the map
     def Load_Map(self):
@@ -117,10 +127,19 @@ class App:
     def tracker(self):
         if not self.trackingarea:
             return
+        self.trackingarea.delete("loc")
+        if not self.track:
+            return
         xloc,yloc = self.randomlocation()
         widthadj = self.image.size[0]/self.dimensions[1]
         heightadj = self.image.size[1]/self.dimensions[2]
-        self.trackingarea.create_rectangle(xloc*widthadj-5,yloc*heightadj-5,xloc*widthadj+5,yloc*heightadj+5,fill="red")
+        xcoordloc = xloc*widthadj
+        ycoordloc = yloc*heightadj
+        self.tag_buffer.append((xcoordloc,ycoordloc))
+        while len(self.tag_buffer) > self.Hlength:
+            self.tag_buffer.popleft()
+        for x in self.tag_buffer:
+            self.trackingarea.create_rectangle(x[0]-5,x[1]-5,x[0]+5,x[1]+5,fill=self.bcolor,tags="loc") 
         self.trackingarea.pack()
         
         
