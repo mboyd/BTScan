@@ -21,7 +21,8 @@ class App:
         self.SideFrame()
         self.trackingarea = None
         self.bcolor = "red"  #color of tracking dots
-        self.tag_buffer = deque([]) #data buffer for tracking 
+        
+        self.position_data = dict() 
         self.Hlength = 5  #length of visible tracking history
         self.track = None
         
@@ -29,19 +30,29 @@ class App:
         self.root.after(100, self.check_queue)
     
     def check_queue(self):
-        self.tracker()
         try:
-            dev_id = self.evt_queue.get_nowait()
-            print 'New device detected: %s' % dev_id
+            item = self.evt_queue.get_nowait()
+            if type(item) == str:
+                self.handle_new_device(item)
+            else:
+                self.handle_new_position(item[0], item[1])
         except Queue.Empty:
             pass
-        self.root.after(10, self.check_queue)
-
-    def randomlocation(self):
-	x =  random.uniform(0,20)
-        y =  random.uniform(0,20)
-        return (x,y)
-       
+        
+        self.root.after(100, self.check_queue)
+    
+    def handle_new_device(self, device_mac):
+        print 'New device detected: %s' % device_mac
+        self.position_data[device_map] = deque([])
+    
+    def handle_new_position(self, device, pos):
+        print 'Position update for device %s: now at %s' % (device, str(pos))
+        pos_buf = self.position_data[device]
+        pos_buf.append(pos)
+        while len(pos_buf) > self.Hlength:
+            pos_buf.popleft()
+        
+        self.plot_positions()
     
     def mainloop(self):
         self.root.mainloop()
@@ -109,10 +120,10 @@ class App:
 
     #handle opening the map
     def Load_Map(self):
-        file = tkFileDialog.askopenfilename()
-        if file == "":
+        img_name = tkFileDialog.askopenfilename()
+        if img_name == "":
             return
-        self.image = Image.open(file)
+        self.image = Image.open(img_name)
         self.map = ImageTk.PhotoImage(self.image)
         optwindow = MapOptions(self.root)
         if not optwindow.val:
@@ -123,8 +134,7 @@ class App:
         self.trackingarea.pack(fill=BOTH, expand=1)
         
         
-    #draws location points
-    def tracker(self):
+    def plot_positions(self):
         if not self.trackingarea:
             return
         self.trackingarea.delete("loc")
@@ -135,11 +145,11 @@ class App:
         heightadj = self.image.size[1]/self.dimensions[2]
         xcoordloc = xloc*widthadj
         ycoordloc = yloc*heightadj
-        self.tag_buffer.append((xcoordloc,ycoordloc))
-        while len(self.tag_buffer) > self.Hlength:
-            self.tag_buffer.popleft()
-        for x in self.tag_buffer:
-            self.trackingarea.create_rectangle(x[0]-5,x[1]-5,x[0]+5,x[1]+5,fill=self.bcolor,tags="loc") 
+
+        for device, pos_buf in self.position_data.items():
+            for (x, y) in pos_buf:
+                    self.trackingarea.create_rectangle(x-5, y-5, x+5, y+5, \
+                                                fill=self.bcolor, tags="loc") 
         self.trackingarea.pack()
         
         
@@ -177,7 +187,8 @@ class MapOptions(tkSimpleDialog.Dialog):
 
 if __name__ == '__main__':
     import scan_server
-    s = scan_server.ScanServer()
+    s = scan_server.TrackingPipeline()
     a = App()
-    s.add_new_device_callback(lambda dev: a.evt_queue.put(dev))
+    s.scan_server.add_new_device_callback(lambda dev: a.evt_queue.put(dev))
+    s.add_new_position_callback(lambda dev, pos: a.evt_queue.put((dev, pos)))
     a.mainloop()

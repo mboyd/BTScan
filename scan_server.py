@@ -1,5 +1,6 @@
 #!/usr/bin/env python2.7
-import socket, struct, threading
+from tracking_method import TrackingMethod, RandomDataTracker
+import socket, struct, threading, Queue, multiprocessing
 
 PORT = 2410
 MSG_MAX_LEN = 128
@@ -11,6 +12,8 @@ class ScanListener(threading.Thread):
     
     def __init__(self, addr='0.0.0.0', port=PORT):
         threading.Thread.__init__(self)
+        self.daemon = True
+        
         self.callbacks = []
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((addr, port))
@@ -54,10 +57,6 @@ class ScanServer(object):
         self.receivers = []
         self.data = dict()
         
-        self.i = 0  # Counter for periodic memory cleanup
-        self.CLEANUP_FREQUENCY = 500
-        self.MAX_DATASET = 100   # Max # points for 1 device / receiver pair
-        
         self.new_device_callbacks = []
         self.new_data_callbacks = []
         
@@ -87,15 +86,72 @@ class ScanServer(object):
         
         map(lambda c: c(packet), self.new_data_callbacks)
         
-        if self.i % self.CLEANUP_FREQUENCY == 0:
-            self.clean_dataset()
-        self.i += 1
+                    
+class TrackingThread(multiprocessing.Process):
+    """Multiprocessing wrapper around TrackingMethod."""
     
-    def clean_dataset(self):
-        for d in self.data.keys():
-            for r in self.data[d].keys():
-                data = self.data[d][r]
-                if len(data) > self.MAX_DATASET:
-                    del data[0:len(data)-self.MAX_DATASET]
+    def __init__(self, method):
+        multiprocessing.Process.__init__(self)
+        self.daemon = True
+        
+        self.method = method
+        self.in_queue = multiprocessing.Queue()
+        self.out_queue = multiprocessing.Queue()
+    
+    def handle_new_data(self, data):
+        self.in_queue.put(data)
+    
+    def get_new_position(self, timeout):
+        try:
+            return self.out_queue.get(True, timeout)
+        except Queue.Empty:
+            return None
+    
+    def run(self):
+        while True:
+            new_data = self.in_queue.get()
+            new_pos = self.method.get_position(new_data)
+            self.out_queue.put(new_pos)
+
+class TrackingPipeline(object):
+    """Manage a tracking pipline, handling incoming data to produce 
+        a stream of position updates. Callbacks will be invoked as
+        c(device, new_pos)
+    """
+    
+    def __init__(self):
+        self.scan_server = ScanServer()
+        self.tracking_threads = dict()
+        self.new_position_callbacks = []
+        
+        self.scan_server.add_new_device_callback(self.handle_new_device)
+        self.scan_server.add_new_data_callback(self.handle_new_data)
+        
+        self.merge_thread = threading.Thread(target=self.merge_queues)
+        self.merge_thread.daemon = True
+        self.merge_thread.start()
+    
+    def add_new_position_callback(self, callback):
+        self.new_position_callbacks.append(callback)
+        
+    def get_tracking_method(self):
+        return RandomDataTracker
+    
+    def handle_new_device(self, device_mac):
+        method_cls = self.get_tracking_method()
+        method = method_cls(device_mac)
+        self.tracking_threads[device_mac] = TrackingThread(method)
+        self.tracking_threads[device_mac].start()
+    
+    def handle_new_data(self, data):
+        self.tracking_threads[data[2]].handle_new_data(data)
+    
+    def merge_queues(self):
+        while True:
+            for device, tracker in self.tracking_threads.items():
+                pos = tracker.get_new_position(0.1)
+                if pos:
+                    map(lambda c: c(device, pos), self.new_position_callbacks)
+    
     
         
