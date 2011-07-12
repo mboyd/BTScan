@@ -1,6 +1,8 @@
 #!/usr/bin/env python2.7
-from tracking_method import TrackingMethod, RandomDataTracker
-import socket, struct, threading, Queue, multiprocessing
+from tracking_method import TrackingMethod, RandomDataTracker, NLMaPTracker
+from data_generator import CircleDataGenerator, LinearInterpolator
+import config, data_packet, data_generator
+import socket, struct, threading, Queue, multiprocessing, time
 
 PORT = 2410
 MSG_MAX_LEN = 128
@@ -28,7 +30,7 @@ class ScanListener(threading.Thread):
             receiver_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[2:8]])
             device_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[8:14]])
             rssi = fields[14]
-            return ((tstamp_sec, tstamp_usec), receiver_mac, device_mac, rssi)
+            return data_packet.DataPacket((tstamp_sec, tstamp_usec), receiver_mac, device_mac, rssi)
         except Exception, e:
             print 'Malformed packet (%s); dropped' % str(e)
 
@@ -38,6 +40,21 @@ class ScanListener(threading.Thread):
             info = self.decode_packet(data)
             for c in self.callbacks:
                 c(info)
+
+class FakeListener(ScanListener):
+    """Return fake data, for the lulz."""
+
+    def __init__(self):
+        ScanListener.__init__(self)
+        self.data_sources = data_generator.DATA_GENERATORS
+    
+    def run(self):
+        while True:
+            time.sleep(1.0/config.DATA_FREQ)
+            data = reduce(lambda x, y: x+y, [source.get_data() for source in self.data_sources])
+            for packet in data:
+                for c in self.callbacks:
+                    c(packet)
 
 
 class ScanServer(object):
@@ -50,7 +67,10 @@ class ScanServer(object):
     """
     
     def __init__(self, *args, **kwargs):
-        self.listener = ScanListener(*args, **kwargs)
+        if "fakeit" in kwargs:
+            self.listener = FakeListener()
+        else:
+            self.listener = ScanListener(*args, **kwargs)
         self.listener.add_callback(self.process_packet)
         
         self.devices = []
@@ -69,20 +89,20 @@ class ScanServer(object):
         self.new_data_callbacks.append(callback)
     
     def process_packet(self, packet):
-        tstamp, receiver_mac, device_mac, rssi = packet
-        if not device_mac in self.data:
-            self.data[device_mac] = {receiver_mac : [rssi]}
-            self.devices.append(device_mac)
+
+        if not packet.device_mac in self.data:
+            self.data[packet.device_mac] = {packet.receiver_mac : [packet.rssi]}
+            self.devices.append(packet.device_mac)
             
-            map(lambda c: c(device_mac), self.new_device_callbacks)
+            map(lambda c: c(packet.device_mac), self.new_device_callbacks)
             
         else:
-            if not receiver_mac in self.data[device_mac]:
-                self.data[device_mac][receiver_mac] = [rssi]
-                if not receiver_mac in self.receivers:
-                    self.receivers.append(receiver_mac)
+            if not packet.receiver_mac in self.data[packet.device_mac]:
+                self.data[packet.device_mac][packet.receiver_mac] = [packet.rssi]
+                if not packet.receiver_mac in self.receivers:
+                    self.receivers.append(packet.receiver_mac)
             else:
-                self.data[device_mac][receiver_mac].append(rssi)
+                self.data[packet.device_mac][packet.receiver_mac].append(packet.rssi)
         
         map(lambda c: c(packet), self.new_data_callbacks)
         
@@ -101,7 +121,7 @@ class TrackingThread(multiprocessing.Process):
     def handle_new_data(self, data):
         self.in_queue.put(data)
     
-    def get_new_position(self, timeout):
+    def get_new_packet(self, timeout):
         try:
             return self.out_queue.get(True, timeout)
         except Queue.Empty:
@@ -109,9 +129,9 @@ class TrackingThread(multiprocessing.Process):
     
     def run(self):
         while True:
-            new_data = self.in_queue.get()
-            new_pos = self.method.get_position(new_data)
-            self.out_queue.put(new_pos)
+            packet = self.in_queue.get()
+            packet.position = self.method.get_position(packet)
+            self.out_queue.put(packet)
 
 class TrackingPipeline(object):
     """Manage a tracking pipline, handling incoming data to produce 
@@ -120,7 +140,7 @@ class TrackingPipeline(object):
     """
     
     def __init__(self):
-        self.scan_server = ScanServer()
+        self.scan_server = ScanServer(fakeit=True)
         self.tracking_threads = dict()
         self.new_position_callbacks = []
         
@@ -135,7 +155,7 @@ class TrackingPipeline(object):
         self.new_position_callbacks.append(callback)
         
     def get_tracking_method(self):
-        return RandomDataTracker
+        return NLMaPTracker
     
     def handle_new_device(self, device_mac):
         method_cls = self.get_tracking_method()
@@ -143,15 +163,15 @@ class TrackingPipeline(object):
         self.tracking_threads[device_mac] = TrackingThread(method)
         self.tracking_threads[device_mac].start()
     
-    def handle_new_data(self, data):
-        self.tracking_threads[data[2]].handle_new_data(data)
+    def handle_new_data(self, packet):
+        self.tracking_threads[packet.device_mac].handle_new_data(packet)
     
     def merge_queues(self):
         while True:
             for device, tracker in self.tracking_threads.items():
-                pos = tracker.get_new_position(0.1)
-                if pos:
-                    map(lambda c: c(device, pos), self.new_position_callbacks)
+                packet = tracker.get_new_packet(0.1)
+                if packet and packet.position:
+                    map(lambda c: c(packet), self.new_position_callbacks)
     
     
         
