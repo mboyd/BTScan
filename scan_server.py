@@ -25,8 +25,8 @@ class ScanListener(threading.Thread):
         try:
             fields = struct.unpack('qqBBBBBBBBBBBBbxxx', data)
             tstamp_sec, tstamp_usec = fields[0:2]
-            receiver_mac = ':'.join([hex(f)[2:] for f in fields[2:8]])
-            device_mac = ':'.join([hex(f)[2:] for f in fields[8:14]])
+            receiver_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[2:8]])
+            device_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[8:14]])
             rssi = fields[14]
             return ((tstamp_sec, tstamp_usec), receiver_mac, device_mac, rssi)
         except Exception, e:
