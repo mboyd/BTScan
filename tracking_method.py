@@ -97,6 +97,3 @@ class NLMaPTracker(TrackingMethod):
         (d, s) = [[self.receiver_buffer[r][i] for r in receivers] for i in (1, 2)]
         return map(mk_float_array, (x, y, z, d, s))
         
-        
-        
-    
