@@ -66,7 +66,7 @@ class LinearInterpolator(DataGenerator):
         self.target_point = 1
         self.last_corner = time.time()
 
-        self.time_between_points = 1
+        self.time_between_points = 3
 
     def get_position(self):
         ellapsed = time.time() - self.last_corner
@@ -80,8 +80,8 @@ class LinearInterpolator(DataGenerator):
         return (x,y)
     
 
-DATA_GENERATORS = [LinearInterpolator(2, 'points.txt'), \
-                       CircleDataGenerator(2, 0.4)]
+DATA_GENERATORS = [LinearInterpolator(.05, 'points1.txt')]# \
+                       #CircleDataGenerator(2, 0.4)]
 
 
 if __name__ == '__main__':

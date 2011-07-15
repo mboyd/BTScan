@@ -3,7 +3,7 @@ import MySQLdb
 class MysqlLogger(object):
 
     def __init__(self):
-        self.db = MySQLdb.connect("localhost","user","gpuuser","bluetooth1")
+        self.db = MySQLdb.connect("18.125.1.67","user","gpuuser","bluetooth1")
         self.cursor =self.db.cursor()
 
     def log(self, p):

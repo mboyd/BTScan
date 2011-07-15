@@ -124,9 +124,9 @@ class App:
         L1.grid(row=row,column=1)
         L2 = Label(self.sideframe, text="#")
         L2.grid(row=row,column=2)
-        color = list('red')
+        color = list('blue')
         colorbutton = Button(self.sideframe,text="color")
-        colorbutton.config(command=mk_button_handler(colorbutton,color), bg="red")
+        colorbutton.config(command=mk_button_handler(colorbutton,color), bg="blue")
         colorbutton.grid(row=row,column=3)
 
         self.device_list[device_mac] = (checkbox_state,color,(checkbox,L1,L2,colorbutton))
@@ -181,7 +181,7 @@ class App:
             xloc, yloc = (x*widthadj, y*heightadj)
             c = ''.join(color)
             tag = str(packet.timestamp[0])
-            self.trackingarea.create_rectangle(xloc-5, yloc-5, xloc+5, yloc+5, \
+            self.trackingarea.create_rectangle(xloc-3, yloc-3, xloc+3, yloc+3, \
                                                    fill=c, tags=(tag))
         self.trackingarea.pack()
 

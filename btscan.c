@@ -135,11 +135,11 @@ static void inquiry_result_with_rssi(int dd, unsigned char *buf, int len)
 static void activate_rssi(int dd)
 {
   write_inquiry_mode_cp cp;
-  int err;
+  uint8_t err;
 
   cp.mode = 1;
-  err = hci_send_cmd(dd, OGF_HOST_CTL, OCF_WRITE_INQUIRY_MODE, WRITE_INQUIRY_MODE_RP_SIZE, &cp);
-  if (debug) fprintf(stderr,"activate_rssi: err=%d\n",err);
+    err = hci_send_cmd(dd, OGF_HOST_CTL, OCF_WRITE_INQUIRY_MODE, WRITE_INQUIRY_MODE_RP_SIZE, &cp);
+  if (debug) fprintf(stderr,"activate_rssi: err=%X\n",err);
   /* No other error checking, since this may fail and we don't care. */
 }
 
