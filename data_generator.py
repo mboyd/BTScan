@@ -30,6 +30,7 @@ class DataGenerator():
         packets = [data_packet.DataPacket( \
                 (time.time(), 0), rec[i] , self.mac , noisyRSSI[i]) \
                        for i in range(len(rec))]
+        
         return packets        
 
 class CircleDataGenerator(DataGenerator):

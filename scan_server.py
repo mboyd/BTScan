@@ -12,11 +12,15 @@ class ScanListener(threading.Thread):
         Provides callbacks on receipt of packets.
     """
     
-    def __init__(self, addr='0.0.0.0', port=PORT):
+    def __init__(self, addr='0.0.0.0', port=PORT, open=True):
         threading.Thread.__init__(self)
         self.daemon = True
         
         self.callbacks = []
+        if open:
+            self.open()
+        
+    def open(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((addr, port))
         
@@ -45,7 +49,7 @@ class FakeListener(ScanListener):
     """Return fake data, for the lulz."""
 
     def __init__(self):
-        ScanListener.__init__(self)
+        ScanListener.__init__(self, open=False)
         self.data_sources = data_generator.DATA_GENERATORS
     
     def run(self):
@@ -129,7 +133,9 @@ class TrackingThread(multiprocessing.Process):
     
     def run(self):
         while True:
+            print 'Getting packet'
             packet = self.in_queue.get()
+            print 'Gotten'
             packet.position = self.method.get_position(packet)
             self.out_queue.put(packet)
 
