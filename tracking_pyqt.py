@@ -351,7 +351,7 @@ s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
 main.show()
 t=QTimer(main)
 main.connect(t, SIGNAL("timeout()"), main.check_queue)
-#t.start(100)
+t.start(100)
 
 
 sys.exit(app.exec_())
