@@ -136,4 +136,31 @@ class XYZData(_object):
     if _newclass:z = _swig_property(_NLMaP.XYZData_z_get, _NLMaP.XYZData_z_set)
     __swig_setmethods__["sigma"] = _NLMaP.XYZData_sigma_set
     __swig_getmethods__["sigma"] = _NLMaP.XYZData_sigma_get
-  
+    if _newclass:sigma = _swig_property(_NLMaP.XYZData_sigma_get, _NLMaP.XYZData_sigma_set)
+    def __init__(self): 
+        this = _NLMaP.new_XYZData()
+        try: self.this.append(this)
+        except: self.this = this
+    __swig_destroy__ = _NLMaP.delete_XYZData
+    __del__ = lambda self : None;
+XYZData_swigregister = _NLMaP.XYZData_swigregister
+XYZData_swigregister(XYZData)
+
+class MultiLateration(_object):
+    __swig_setmethods__ = {}
+    __setattr__ = lambda self, name, value: _swig_setattr(self, MultiLateration, name, value)
+    __swig_getmethods__ = {}
+    __getattr__ = lambda self, name: _swig_getattr(self, MultiLateration, name)
+    __repr__ = _swig_repr
+    def __init__(self, *args): 
+        this = _NLMaP.new_MultiLateration(*args)
+        try: self.this.append(this)
+        except: self.this = this
+    __swig_destroy__ = _NLMaP.delete_MultiLateration
+    __del__ = lambda self : None;
+    def GetPosition(self, *args): return _NLMaP.MultiLateration_GetPosition(self, *args)
+MultiLateration_swigregister = _NLMaP.MultiLateration_swigregister
+MultiLateration_swigregister(MultiLateration)
+
+
+
