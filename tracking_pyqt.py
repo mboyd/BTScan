@@ -4,19 +4,21 @@
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-import scan_server, config, data_packet#, Mysql_logger
+import scan_server, config, data_packet, Mysql_logger
 from PIL import Image
 from collections import deque
 import sys, time, Queue, random
 import pickle 
 
 class MainApp (QWidget):
-    def __init__(self):        
+    def __init__(self):
+        
         #Variables
         self.device_list = dict() #contains tracking_state, color, gui_element, listed by MAC
         self.position_data = dict() 
         self.Hlength = config.TRACKING_HISTORY # length of visible tracking history
         self.evt_queue = Queue.Queue() # queue of data streaming from mysql(?)
+	self.packet_buf = None #
         
         ### GUI SETUP ###
         QMainWindow.__init__(self)
@@ -31,9 +33,9 @@ class MainApp (QWidget):
         quit.setStatusTip('Exit Application')
         self.connect(quit, SIGNAL('triggered()'), SLOT('close()'))
 
-        loadMap = QAction('Load Map', self)
+        loadMap = QAction('Load Building', self)
         loadMap.setShortcut('Ctrl+o')
-        loadMap.setStatusTip('Load Map')
+        loadMap.setStatusTip('Load Building')
         self.connect(loadMap, SIGNAL('triggered()'), self.mapOpen)        
 
         showRSSI = QAction('Show RSSI', self)
@@ -50,25 +52,20 @@ class MainApp (QWidget):
         
      
        
-        # Add new blank tab
-        newTab = QAction('New Tab', self)
-        newTab.setShortcut('Ctrl+n')
-        newTab.setStatusTip('New Tab')
-        self.connect(newTab, SIGNAL('triggered()'), self.addTab)
-        
+       
         # Remove highlighted tab
-        rmTab = QAction('Remove Tab', self)
+        rmTab = QAction('Remove Map', self)
         rmTab.setShortcut('Ctrl+w')
-        rmTab.setStatusTip('Remove Tab')
+        rmTab.setStatusTip('Remove Map')
         self.connect(rmTab, SIGNAL('triggered()'), self.rmCurTab)
         
         # Rename highlighted tab
-        rnTab = QAction('Rename Tab', self)
+        rnTab = QAction('Rename Map', self)
         # rnTab.setShortcut('Ctrl+w')
-        rnTab.setStatusTip('Rename Tab')
+        rnTab.setStatusTip('Rename Map')
         self.connect(rnTab, SIGNAL('triggered()'), self.rnCurTab)
 
-     # Tabs
+	 # Tabs
         self.mainTab = QTabWidget()
         self.sideTab = QTabWidget()        
         tab1 = Map(self)
@@ -80,23 +77,17 @@ class MainApp (QWidget):
         # Initialize menu bar, set menu options
         menubar = QMenuBar()
         file = menubar.addMenu('&File')
-        tabs = menubar.addMenu('&Tabs')
+	maps = menubar.addMenu('&Map')
         file.addAction(loadMap)
         file.addAction(showRSSI)
         file.addAction(history)
         file.addAction(quit)
-        tabs.addAction(newTab)
-        tabs.addAction(rmTab)
-        tabs.addAction(rnTab)
+        maps.addAction(rmTab)
+        maps.addAction(rnTab)
         
         # Set tab layouts
-        p1_vertical = QVBoxLayout(tab1)
-        p2_vertical = QVBoxLayout(tab2)
-        p3_vertical = QVBoxLayout(tab3)
-        p4_vertical = QVBoxLayout(tab4)
 
         self.mainTab.addTab(tab1, "Main")
-        self.mainTab.addTab(tab2, "Description")
         self.sideTab.addTab(tab3, "Tribe")
         self.sideTab.addTab(tab4, "Other")
         
@@ -122,34 +113,27 @@ class MainApp (QWidget):
         self.RSSI.resize(300, 200)
         self.RSSI.setWindowTitle('RSSI')
         
-        
 
         self.rssi_plot = None # necessary?
         
         self.add_device('0.0.0.0') #TEST
-    
-    #self.mainLoop()
-    def mainLoop(self):
-       print 'mainLoop'
-       cont=True
-       while cont==True:
-           print 'cont'
-           self.check_queue()
-           time.sleep(10)
-    
+	
 
-    
+	
     def mapOpen(self): # Loads map in current tab
-    
-        filename = QFileDialog.getOpenFileName(self, 'Open file')
-    
-        
+    	filename = QFileDialog.getOpenFileName(self, 'Open file')
+	f=open(filename).readline()
+	
+	fp=f.rstrip()
+	fp=fp.strip('\'')+'.p'
+	execfile(filename.__str__())
+	building=pickle.load(open (fp))
+	for floor in building.floors:
+		self.addTab(floor.name, floor.file_name)
+
+		
         tw = self.mainTab
-        pmap = QPixmap(str(filename)).scaled(tw.size())
-        
-        tw.currentWidget().setPixmap(pmap)
-        
-        # trackingArea: left canvas
+	
         
     def History(self):
         length = QInputDialog.getInt(self, "Tracking History",
@@ -158,23 +142,30 @@ class MainApp (QWidget):
         self.Hlength = length
 
     def closeEvent(self, event):
-        event.accept()
-    
-    def addTab(self):
-        newTab = QLabel()
-        # box layout?
-        self.mainTab.addTab(newTab, 'New')
+        reply = QMessageBox.question(self, 'Message',
+            'Are you sure you want to quit?',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+    def addTab(self, name, image):	
+	new = QLabel()
+	tw=self.mainTab
+        tw.addTab(new, str(name))
+	pmap= QPixmap(str(image)).scaled(tw.size())
+	new.setPixmap(pmap)
     
     def rmCurTab(self):
         self.mainTab.removeTab(self.mainTab.currentIndex())
         
     def rnCurTab(self):
-        input = QInputDialog(self)
-        input.setLabelText('New name?')
-        newName = QInputDialog.getText(self, 'Rename Tab', 'New name?')
-        if str(newName[0]) != "": 
-            mt = self.mainTab
-            mt.setTabText(mt.currentIndex(), str(newName[0]))
+    	input = QInputDialog(self)
+    	input.setLabelText('New name?')
+    	newName = QInputDialog.getText(self, 'Rename Tab', 'New name?')
+    	if str(newName[0]) != "": 
+    		mt = self.mainTab
+    		mt.setTabText(mt.currentIndex(), str(newName[0]))
 
     def showRSSI(self):
         
@@ -206,8 +197,8 @@ class MainApp (QWidget):
                 else:
                     self.handle_new_position(item)
         except Queue.Empty:
-            pass
-        self.mainTab.widget(0).update()
+        	pass
+	self.mainTab.widget(0).update()
         
             # self.root.after(config.POLL_PERIOD, self.check_queue) # FIXME
     # adds necessary information for a new device (device_list, position_data)
@@ -262,13 +253,13 @@ class MainApp (QWidget):
         if not packet.device_mac in self.position_data:
             self.handle_new_device(packet.device_mac)
         
-        packet_buf = self.position_data[packet.device_mac]
-        packet_buf.append(packet)
+        self.packet_buf = self.position_data[packet.device_mac]
+        self.packet_buf.append(packet)
         
-        while len(packet_buf) > self.Hlength:
+        while len(self.packet_buf) > self.Hlength:
             
-            packet_buf.popleft()
-    
+            self.packet_buf.popleft()
+	
         
     ##remove_packet
     
@@ -280,28 +271,22 @@ class Map(QLabel):
         super(Map, self).__init__()
         pm = QPixmap('test-grid.gif').scaled(self.size())
         self.setPixmap(pm)
-        self.m=main
-        self.time=1
-    #def __init__(self, pathname, dList):
-    #    QLabel.__init__()
-        #self.setPixmap(QPixmap(pathname))
+	self.m=main
+	self.time=1
         
     #e: event
     def paintEvent(self, e):
         painter = QPainter();        
         painter.begin(self)
         painter.drawPixmap(10, 10, QPixmap('test-grid.gif'));
-        self.drawPoints(painter)
+     	self.drawPoints(painter)
         painter.end()
     def drawPoints(self, qp):
-        qp.setBrush(QColor(255, 0, 0, 80))
-        qp.setPen(Qt.red)
-        for device_mac in self.m.position_data.keys():
-            for packet in self.m.position_data[device_mac]:
-                x,y = packet.position
-                print str((x,y))
-                
-                qp.drawEllipse(x*400, y*400,5,5)
+	qp.setBrush(QColor(255, 0, 0, 80))
+	qp.setPen(Qt.red)
+	for i in range(len(self.m.packet_buf)):
+            x,y = self.m.packet_buf[i].position
+            qp.drawEllipse(x*400, y*400,5,5)
 
  
         
@@ -339,27 +324,23 @@ class Map(QLabel):
 
 # Run application
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    main = MainApp()
-    print 'Creating tracking pipeline'
-    s = scan_server.TrackingPipeline()
-    print 'Done'
-    s.scan_server.add_new_device_callback(lambda dev: main.evt_queue.put(dev))
-    s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
-    main.show()
-    t=QTimer(main)
-    main.connect(t, SIGNAL("timeout()"), main.check_queue)
-    t.start(100)
 
-    print 'Running app...'
-    sys.exit(app.exec_())
-    print 'done, exiting'
+app = QApplication(sys.argv)
+main = MainApp()
+s = scan_server.TrackingPipeline()
+s.scan_server.add_new_device_callback(lambda dev: main.evt_queue.put(dev))
+s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
+main.show()
+t=QTimer(main)
+main.connect(t, SIGNAL("timeout()"), main.check_queue)
+t.start(100)
+
+
+sys.exit(app.exec_())
 
 
 
-    #m = Mysql_logger.MysqlLogger()
-    #s.add_new_position_callback(lambda packet: m.log(packet))
+   
 
         
         
@@ -368,4 +349,3 @@ if __name__ == '__main__':
         # Things to add               #
         # iconsize, toolButtonStyle  #
         ##############################
-
