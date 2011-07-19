@@ -78,9 +78,13 @@ class NLMaPTracker(TrackingMethod):
         
         x, y, z, d, s = self.nlmap_format_wrapper()
         
-        m = NLMaP.MultiLateration(x, y, z, d, s, len(self.receiver_buffer.keys()))
-        pos = m.GetPosition(self.iterations, self.delta, self.convergence)
-	#print 'Processing latency: %f sec' % (time.time() - p.timestamp[0])
+        try:
+            m = NLMaP.MultiLateration(x, y, z, d, s, len(self.receiver_buffer.keys()))
+            pos = m.GetPosition(self.iterations, self.delta, self.convergence)
+        except:
+            print 'Modelling failure, continuing...'
+            pos = (0, 0)
+	    #print 'Processing latency: %f sec' % (time.time() - p.timestamp[0])
         return (pos.x, pos.y)
         
     

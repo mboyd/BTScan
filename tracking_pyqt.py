@@ -12,7 +12,8 @@ import pickle
 
 class MainApp (QMainWindow):
     
-    def __init__(self):
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
         # Variables
         self.device_list = dict() #contains tracking_state, color, row, listed by MAC
         self.position_data = dict()
@@ -124,26 +125,25 @@ class MainApp (QMainWindow):
         if col == 3:
             item = self.deviceTable.item(row, col)
             dev = str(item.data(Qt.UserRole).toString())
-            self.changeColor(dev, item)
-    
-    def changeColor(self, dev, item):
-        color = QColorDialog.getColor()
-        item.setBackground(QBrush(color))
-        self.device_list[dev][1] = color
+            color = QColorDialog.getColor()
+            item.setBackground(QBrush(color))
+            self.device_list[dev][1] = color
+
     
     def mapOpen(self): # Loads map in current tab
-     filename = QFileDialog.getOpenFileName(self, 'Open file')
-     f=open(filename).readline()
-
-     fp=f.rstrip()
-     fp=fp.strip('\'')+'.p'
-     execfile(filename.__str__())
-     building=pickle.load(open (fp))
-     for floor in building.floors:
-	    newTab=Map(self, floor.file_name)
-            self.addTab(floor.name, floor.file_name)
-
+        filename = QFileDialog.getOpenFileName(self, 'Open file')
+        f=open(filename).readline()
         
+        fp=f.rstrip()
+        fp=fp.strip('\'')+'.p'
+        execfile(filename.__str__())
+        building=pickle.load(open(fp))
+        
+        for floor in building.floors:
+            newTab = Map(self, floor.file_name)
+            self.addTab(floor.name, floor.file_name)
+    
+    
     def History(self):
         length = QInputDialog.getInt(self, "Tracking History",
                                       "Please input the history length", value=5,
@@ -151,6 +151,7 @@ class MainApp (QMainWindow):
         self.Hlength = length
 
     def closeEvent(self, event):
+        self.pipeline.shutdown()
         event.accept()
     
     def addTab(self, name, image):
@@ -288,6 +289,22 @@ class Map(QLabel):
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
                 qp.drawEllipse(x*self.width(), y*self.height(),5,5)
+                
+class SceneMap(QWidget):
+    """Higher-performance map implementation.  Work in progress."""
+    
+    def __init__(self, main, image):
+        super(QWidget, self).__init__()
+        self.m = main
+        self.pm = QGraphicsPixmap(QPixmap(image).scaled(self.m.mainTab.size()))
+        self.setPixmap(self.pm)
+        self.time = 1
+        layout = QVBoxLayout()
+        self.scene = QGraphicsScene()
+        layout.addItem(self.scene)
+        self.setLayout(layout)
+    
+
 
 #file options dialog to define map dimensions
 # TODO: adapt to PyQt
@@ -325,9 +342,10 @@ class Map(QLabel):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    main = MainApp()
+
     
     s = scan_server.TrackingPipeline()
+    main = MainApp(s)
     s.scan_server.add_new_device_callback(lambda dev: main.evt_queue.put(dev))
     s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
     

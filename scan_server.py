@@ -128,7 +128,7 @@ class TrackingThread(multiprocessing.Process):
     def get_new_packet(self, timeout):
         try:
             return self.out_queue.get(True, timeout)
-        except Exception:
+        except:
             return None
     
     def run(self):
@@ -147,6 +147,8 @@ class TrackingPipeline(object):
         self.scan_server = ScanServer(fakeit=True)
         self.tracking_threads = dict()
         self.new_position_callbacks = []
+        
+        self.shouldExit = False
         
         self.scan_server.add_new_device_callback(self.handle_new_device)
         self.scan_server.add_new_data_callback(self.handle_new_data)
@@ -168,6 +170,11 @@ class TrackingPipeline(object):
         self.tracking_threads[device_mac].start()
     
     def handle_new_data(self, packet):
+        if not self.tracking_threads[packet.device_mac].is_alive():
+            if self.shouldExit:
+                return
+            print 'Reviving dead tracking thread'
+            self.handle_new_device(packet.device_mac)
         self.tracking_threads[packet.device_mac].handle_new_data(packet)
     
     def merge_queues(self):
@@ -176,6 +183,11 @@ class TrackingPipeline(object):
                 packet = tracker.get_new_packet(0.1)
                 if packet and packet.position:
                     map(lambda c: c(packet), self.new_position_callbacks)
+    
+    def shutdown(self):
+        self.shouldExit = True
+        for thread in self.tracking_threads.values():
+            thread.terminate()
     
     
         
