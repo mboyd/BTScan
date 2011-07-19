@@ -280,6 +280,8 @@ class Map(QLabel):
         qp.setBrush(QColor(255, 0, 0, 80))
         qp.setPen(Qt.red)
         for device_mac in self.m.position_data.keys():
+            if not self.m.device_list[device_mac][0]:
+                continue
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
                 qp.drawEllipse(x*self.width(), y*self.height(),5,5)
