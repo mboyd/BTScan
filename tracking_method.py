@@ -63,14 +63,14 @@ class NLMaPTracker(TrackingMethod):
             buffer = [b[1] for b in data_buffer]
             #print str(buffer)
 
-            avg = sum(buffer) / len(buffer)
+            avg = sum(buffer) / len(buffer)  #consider a median filter instead of rolling average
             std = (sum([(x-avg)**2 for x in buffer]))**.5
             
             
             if True:
                 std = 1  # FIXME: sketchy hack
             
-            #filtered_buffer = filter(lambda x: abs(x-avg) < 2*std, buffer)
+            
             
             self.receiver_buffer[receiver_mac][1] = avg
             self.receiver_buffer[receiver_mac][2] = std
