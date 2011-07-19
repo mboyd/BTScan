@@ -80,8 +80,8 @@ class LinearInterpolator(DataGenerator):
         return (x,y)
     
 
-DATA_GENERATORS = [LinearInterpolator(.05, 'points1.txt')]# \
-                       #CircleDataGenerator(2, 0.4)]
+DATA_GENERATORS = [LinearInterpolator(.05, 'points1.txt'), \
+                       CircleDataGenerator(1, 0.4)]
 
 
 if __name__ == '__main__':

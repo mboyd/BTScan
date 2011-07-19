@@ -14,8 +14,8 @@ class MainApp (QMainWindow):
     
     def __init__(self):        
         # Variables
-        self.device_list = dict() #contains tracking_state, color, gui_element, listed by MAC
-        self.position_data = dict() 
+        self.device_list = dict() #contains tracking_state, color, row, listed by MAC
+        self.position_data = dict()
         self.Hlength = config.TRACKING_HISTORY # length of visible tracking history
         self.evt_queue = Queue.Queue() # queue of data streaming from scan_server
         
@@ -112,7 +112,10 @@ class MainApp (QMainWindow):
         return tbl
     
     def handleDeviceTableClick(self, item):
-        print str(item)
+        data = str(item.data(Qt.UserRole).toString())
+        if data:
+            state = (item.checkState() == 2)
+            self.device_list[data][0] = state
     
     def mapOpen(self): # Loads map in current tab
     	filename = QFileDialog.getOpenFileName(self, 'Open file')
@@ -134,13 +137,7 @@ class MainApp (QMainWindow):
         self.Hlength = length
 
     def closeEvent(self, event):
-        reply = QMessageBox.question(self, 'Message',
-            'Are you sure you want to quit?',
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
+        event.accept()
     
     def addTab(self, name, image):	
         new = QLabel()
@@ -203,6 +200,10 @@ class MainApp (QMainWindow):
             return handle
 
         row = len(self.device_list)
+        color = Qt.red
+        
+        # Add device to stored dictionary
+        self.device_list[device_mac] = [True, color, row]
               
         ### Add new device in sidebar
         self.deviceTable.setRowCount(row+1)
@@ -223,17 +224,11 @@ class MainApp (QMainWindow):
         nrLabel.setFlags(Qt.ItemIsEnabled)
         self.deviceTable.setItem(row, 2, nrLabel)
         
-        cLabel = QTableWidgetItem("color")
-        cLabel.setBackground(QBrush(Qt.red))
+        cLabel = QTableWidgetItem("")
+        cLabel.setBackground(QBrush(color))
         cLabel.setFlags(Qt.ItemIsEnabled)
         self.deviceTable.setItem(row, 3, cLabel)
-        
-
-        # should be colored button that opens color dialog
-        
-        
-        # Add device to stored dictionary
-        #self.device_list[device_mac] = (checkbox.isChecked(), color, (checkbox, L1, L2, colorbutton))
+       
 
     def add_packet(self, packet):
         #floor=self.mainTab.indexOf(packet.floor)
@@ -280,6 +275,8 @@ class Map(QLabel):
         qp.setBrush(QColor(255, 0, 0, 80))
         qp.setPen(Qt.red)
         for device_mac in self.m.position_data.keys():
+            if not self.m.device_list[device_mac][0]:
+                continue
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
                 qp.drawEllipse(x*400, y*400,5,5)
@@ -328,7 +325,6 @@ if __name__ == '__main__':
     
     #m = Mysql_logger.MysqlLogger()
     #s.add_new_position_callback(lambda packet: m.log(packet))
-    print 'done'
     
     main.show()
     t = QTimer(main)
