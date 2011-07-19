@@ -102,6 +102,7 @@ class MainApp (QMainWindow):
     def createSideMenu(self):
         tbl = QTableWidget(1, 4)
         self.connect(tbl, SIGNAL("itemChanged(QTableWidgetItem*)"), self.handleDeviceTableClick)
+        self.connect(tbl, SIGNAL("itemDoubleClicked(QTableWidgetItem*)"), self.handleDeviceTableDoubleClick)
         
         tbl.setHorizontalHeaderLabels(["", "BT Addr", "# Receivers", "Color"])
         tbl.setColumnWidth(0, 27)
@@ -116,6 +117,11 @@ class MainApp (QMainWindow):
         if data:
             state = (item.checkState() == 2)
             self.device_list[data][0] = state
+    
+    def handleDeviceTableDoubleClick(self, item):
+        data = str(item.data(Qt.UserRole).toString())
+        if data:
+            print data
     
     def mapOpen(self): # Loads map in current tab
      filename = QFileDialog.getOpenFileName(self, 'Open file')
@@ -225,7 +231,7 @@ class MainApp (QMainWindow):
         
         cLabel = QTableWidgetItem("")
         cLabel.setBackground(QBrush(color))
-        cLabel.setFlags(Qt.ItemIsEnabled)
+        #cLabel.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
         self.deviceTable.setItem(row, 3, cLabel)
        
 
