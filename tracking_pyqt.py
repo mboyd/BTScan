@@ -101,8 +101,8 @@ class MainApp (QMainWindow):
 
     def createSideMenu(self):
         tbl = QTableWidget(1, 4)
-        self.connect(tbl, SIGNAL("itemChanged(QTableWidgetItem*)"), self.handleDeviceTableClick)
-        self.connect(tbl, SIGNAL("itemDoubleClicked(QTableWidgetItem*)"), self.handleDeviceTableDoubleClick)
+        self.connect(tbl, SIGNAL("itemChanged(QTableWidgetItem*)"), self.handleItemChanged)
+        self.connect(tbl, SIGNAL("cellClicked(int, int)"), self.handleDeviceTableClick)
         
         tbl.setHorizontalHeaderLabels(["", "BT Addr", "# Receivers", "Color"])
         tbl.setColumnWidth(0, 27)
@@ -112,16 +112,24 @@ class MainApp (QMainWindow):
         
         return tbl
     
-    def handleDeviceTableClick(self, item):
+    def handleItemChanged(self, item):
         data = str(item.data(Qt.UserRole).toString())
         if data:
+            if item.checkState() == 0:
+                return      # Not a checkbox
             state = (item.checkState() == 2)
             self.device_list[data][0] = state
     
-    def handleDeviceTableDoubleClick(self, item):
-        data = str(item.data(Qt.UserRole).toString())
-        if data:
-            print data
+    def handleDeviceTableClick(self, row, col):
+        if col == 3:
+            item = self.deviceTable.item(row, col)
+            dev = str(item.data(Qt.UserRole).toString())
+            self.changeColor(dev, item)
+    
+    def changeColor(self, dev, item):
+        color = QColorDialog.getColor()
+        item.setBackground(QBrush(color))
+        self.device_list[dev][1] = color
     
     def mapOpen(self): # Loads map in current tab
      filename = QFileDialog.getOpenFileName(self, 'Open file')
@@ -194,16 +202,7 @@ class MainApp (QMainWindow):
    
      # Adds new device being tracked to side frame
     def add_device(self, device_mac):
-                    
-        def mk_button_handler(button, color):
-            def handle():
-                # FIXME
-                #result = tkColorChooser.askcolor()
-                QColorDialog.getColor(Qt_red, self)
-                color[:] = list(result[1])
-                button.config(bg=result[1])
-            return handle
-
+    
         row = len(self.device_list)
         color = Qt.red
         
@@ -219,7 +218,6 @@ class MainApp (QMainWindow):
         checkbox.setData(Qt.UserRole, device_mac)
         
         self.deviceTable.setItem(row, 0, checkbox)
-        # TODO: set to emit signal readable by drawer?
         
         dmLabel = QTableWidgetItem(device_mac)
         dmLabel.setFlags(Qt.ItemIsEnabled)
@@ -231,7 +229,8 @@ class MainApp (QMainWindow):
         
         cLabel = QTableWidgetItem("")
         cLabel.setBackground(QBrush(color))
-        #cLabel.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+        cLabel.setFlags(Qt.ItemIsEnabled)
+        cLabel.setData(Qt.UserRole, device_mac)
         self.deviceTable.setItem(row, 3, cLabel)
        
 
@@ -277,11 +276,15 @@ class Map(QLabel):
         painter.end()
     
     def drawPoints(self, qp):
-        qp.setBrush(QColor(255, 0, 0, 80))
-        qp.setPen(Qt.red)
+
         for device_mac in self.m.position_data.keys():
             if not self.m.device_list[device_mac][0]:
                 continue
+            
+            color = self.m.device_list[device_mac][1]
+            qp.setBrush(color)
+            qp.setPen(color)
+            
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
                 qp.drawEllipse(x*self.width(), y*self.height(),5,5)
