@@ -42,7 +42,7 @@ class NLMaPTracker(TrackingMethod):
         self.convergence = .8
 
     def get_position(self, p):
-	#print 'Pre-Processing latency: %f sec' % (time.time() - p.timestamp[0])
+	    #print 'Pre-Processing latency: %f sec' % (time.time() - p.timestamp[0])
             
         distance = self.range_estimator.get_range(p.rssi)
         
@@ -64,14 +64,14 @@ class NLMaPTracker(TrackingMethod):
             buffer = [b[1] for b in data_buffer]
             #print str(buffer)
 
-            avg = sum(buffer) / len(buffer)
+            avg = sum(buffer) / len(buffer)  #consider a median filter instead of rolling average
             std = (sum([(x-avg)**2 for x in buffer]))**.5
             
             
             if True:
                 std = 1  # FIXME: sketchy hack
             
-            #filtered_buffer = filter(lambda x: abs(x-avg) < 2*std, buffer)
+            
             
             self.receiver_buffer[receiver_mac][1] = avg
             self.receiver_buffer[receiver_mac][2] = std
