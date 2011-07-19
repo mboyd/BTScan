@@ -8,11 +8,11 @@ import scan_server, config, data_packet, Mysql_logger
 from PIL import Image
 from collections import deque
 import sys, time, Queue, random
-import pickle 
+import pickle
 
 class MainApp (QMainWindow):
     
-    def __init__(self):        
+    def __init__(self):
         # Variables
         self.device_list = dict() #contains tracking_state, color, row, listed by MAC
         self.position_data = dict()
@@ -35,7 +35,7 @@ class MainApp (QMainWindow):
         loadMap = QAction('Load Building', self)
         loadMap.setShortcut('Ctrl+o')
         loadMap.setStatusTip('Load Building')
-        self.connect(loadMap, SIGNAL('triggered()'), self.mapOpen)        
+        self.connect(loadMap, SIGNAL('triggered()'), self.mapOpen)
 
         showRSSI = QAction('Show RSSI', self)
         showRSSI.setShortcut('Ctrl+r')
@@ -77,9 +77,9 @@ class MainApp (QMainWindow):
         
         # Tabs
         self.mainTab = QTabWidget()
-        self.sideTab = QTabWidget()        
+        self.sideTab = QTabWidget()
         
-        self.mapView = Map(self)
+        self.mapView = Map(self, 'test-grid.gif')
         self.descriptionView = QLabel()
         self.deviceTable = self.createSideMenu()
 
@@ -118,17 +118,17 @@ class MainApp (QMainWindow):
             self.device_list[data][0] = state
     
     def mapOpen(self): # Loads map in current tab
-    	filename = QFileDialog.getOpenFileName(self, 'Open file')
-    	f=open(filename).readline()
-	
-    	fp=f.rstrip()
-    	fp=fp.strip('\'')+'.p'
-    	execfile(filename.__str__())
-    	building=pickle.load(open (fp))
-    	for floor in building.floors:
+     filename = QFileDialog.getOpenFileName(self, 'Open file')
+     f=open(filename).readline()
+
+     fp=f.rstrip()
+     fp=fp.strip('\'')+'.p'
+     execfile(filename.__str__())
+     building=pickle.load(open (fp))
+     for floor in building.floors:
+	    newTab=Map(self, floor.file_name)
             self.addTab(floor.name, floor.file_name)
-            tw = self.mainTab
-	
+
         
     def History(self):
         length = QInputDialog.getInt(self, "Tracking History",
@@ -139,23 +139,22 @@ class MainApp (QMainWindow):
     def closeEvent(self, event):
         event.accept()
     
-    def addTab(self, name, image):	
-        new = QLabel()
+    def addTab(self, name, image):
+        new = Map(self, image)
         tw = self.mainTab
         tw.addTab(new, str(name))
-        pmap= QPixmap(str(image)).scaled(tw.size())
-        new.setPixmap(pmap)
+       
     
     def rmCurTab(self):
         self.mainTab.removeTab(self.mainTab.currentIndex())
         
     def rnCurTab(self):
-    	input = QInputDialog(self)
-    	input.setLabelText('New name?')
-    	newName = QInputDialog.getText(self, 'Rename Tab', 'New name?')
-    	if str(newName[0]) != "": 
-    		mt = self.mainTab
-    		mt.setTabText(mt.currentIndex(), str(newName[0]))
+     input = QInputDialog(self)
+     input.setLabelText('New name?')
+     newName = QInputDialog.getText(self, 'Rename Tab', 'New name?')
+     if str(newName[0]) != "":
+         mt = self.mainTab
+         mt.setTabText(mt.currentIndex(), str(newName[0]))
 
     def showRSSI(self):
         self.RSSI.show()
@@ -163,7 +162,7 @@ class MainApp (QMainWindow):
 
    
        
-    ###################################   
+    ###################################
     ##### DEVICE HANDLING METHODS #####
     ###################################
     
@@ -178,7 +177,7 @@ class MainApp (QMainWindow):
                     self.handle_new_position(item)
         except Queue.Empty:
             pass
-	    self.mainTab.widget(0).update()
+        self.mainTab.widget(0).update()
     
     # adds necessary information for a new device (device_list, position_data)
     def handle_new_device(self, device_mac):
@@ -187,7 +186,7 @@ class MainApp (QMainWindow):
          self.add_device(device_mac)
         
    
-     # Adds new device being tracked to side frame   
+     # Adds new device being tracked to side frame
     def add_device(self, device_mac):
                     
         def mk_button_handler(button, color):
@@ -248,38 +247,36 @@ class MainApp (QMainWindow):
         while len(self.packet_buf) > self.Hlength:
             
             self.packet_buf.popleft()
-	
+
         
     ##remove_packet
     
 class Map(QLabel):
 
     #pathname is the pathname of the map file
-    # dList 
-    def __init__ (self, main):
+    # dList
+    def __init__ (self, main, image):
         super(Map, self).__init__()
-        pm = QPixmap('test-grid.gif').scaled(self.size())
-        self.setPixmap(pm)
-        self.m=main
+	self.m=main
+        self.pm = QPixmap(image).scaled(self.m.mainTab.size())
+        self.setPixmap(self.pm)
         self.time=1
         
     #e: event
     def paintEvent(self, e):
-        painter = QPainter();        
+        painter = QPainter();
         painter.begin(self)
-        painter.drawPixmap(10, 10, QPixmap('test-grid.gif'));
-     	self.drawPoints(painter)
+        painter.drawPixmap(0, 0, self.pm.scaled(self.m.mainTab.size()))
+        self.drawPoints(painter)
         painter.end()
     
     def drawPoints(self, qp):
         qp.setBrush(QColor(255, 0, 0, 80))
         qp.setPen(Qt.red)
         for device_mac in self.m.position_data.keys():
-            if not self.m.device_list[device_mac][0]:
-                continue
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
-                qp.drawEllipse(x*400, y*400,5,5)
+                qp.drawEllipse(x*self.width(), y*self.height(),5,5)
 
 #file options dialog to define map dimensions
 # TODO: adapt to PyQt
@@ -335,6 +332,6 @@ if __name__ == '__main__':
 
         
         ##############################
-        # Things to add               #
-        # iconsize, toolButtonStyle  #
+        # Things to add #
+        # iconsize, toolButtonStyle #
         ##############################
