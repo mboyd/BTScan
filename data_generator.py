@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 import math,time,random
 import data_packet, config

@@ -128,14 +128,12 @@ class TrackingThread(multiprocessing.Process):
     def get_new_packet(self, timeout):
         try:
             return self.out_queue.get(True, timeout)
-        except Queue.Empty:
+        except Exception:
             return None
     
     def run(self):
         while True:
-            print 'Getting packet'
             packet = self.in_queue.get()
-            print 'Gotten'
             packet.position = self.method.get_position(packet)
             self.out_queue.put(packet)
 

@@ -10,18 +10,19 @@ from collections import deque
 import sys, time, Queue, random
 import pickle 
 
-class MainApp (QWidget):
+class MainApp (QMainWindow):
+    
     def __init__(self):        
-        #Variables
+        # Variables
         self.device_list = dict() #contains tracking_state, color, gui_element, listed by MAC
         self.position_data = dict() 
         self.Hlength = config.TRACKING_HISTORY # length of visible tracking history
-        self.evt_queue = Queue.Queue() # queue of data streaming from mysql(?)
+        self.evt_queue = Queue.Queue() # queue of data streaming from scan_server
         
         ### GUI SETUP ###
         QMainWindow.__init__(self)
         
-        self.resize (800, 600)
+        self.resize(1000, 600)
         self.setWindowTitle('Tracker')
         
         # Menu
@@ -45,10 +46,6 @@ class MainApp (QWidget):
         history.setShortcut('Ctrl+h')
         history.setStatusTip('History')
         self.connect(history, SIGNAL('triggered()'), self.History)
-
-
-        
-     
        
         # Add new blank tab
         newTab = QAction('New Tab', self)
@@ -67,15 +64,6 @@ class MainApp (QWidget):
         # rnTab.setShortcut('Ctrl+w')
         rnTab.setStatusTip('Rename Tab')
         self.connect(rnTab, SIGNAL('triggered()'), self.rnCurTab)
-
-     # Tabs
-        self.mainTab = QTabWidget()
-        self.sideTab = QTabWidget()        
-        tab1 = Map(self)
-        tab2 = QLabel()
-        tab3 = QTableWidget()
-        tab4 = QLabel()
-
         
         # Initialize menu bar, set menu options
         menubar = QMenuBar()
@@ -85,64 +73,56 @@ class MainApp (QWidget):
         file.addAction(showRSSI)
         file.addAction(history)
         file.addAction(quit)
+        self.setMenuBar(menubar)
+        
         tabs.addAction(newTab)
         tabs.addAction(rmTab)
         tabs.addAction(rnTab)
         
-        # Set tab layouts
-        p1_vertical = QVBoxLayout(tab1)
-        p2_vertical = QVBoxLayout(tab2)
-        p3_vertical = QVBoxLayout(tab3)
-        p4_vertical = QVBoxLayout(tab4)
-
-        self.mainTab.addTab(tab1, "Main")
-        self.mainTab.addTab(tab2, "Description")
-        self.sideTab.addTab(tab3, "Tribe")
-        self.sideTab.addTab(tab4, "Other")
+        # Tabs
+        self.mainTab = QTabWidget()
+        self.sideTab = QTabWidget()        
         
-        self.mainFrame = QVBoxLayout()
-        self.mainFrame.addWidget(self.mainTab)
-        self.sideFrame = QVBoxLayout()
-        self.sideFrame.addWidget(self.sideTab)
+        self.mapView = Map(self)
+        self.descriptionView = QLabel()
+        self.deviceTable = self.createSideMenu()
 
-        frame2 = QHBoxLayout()
-        frame2.addLayout(self.mainFrame, 2)
-        frame2.addLayout(self.sideFrame, 1)
-        frame1 = QVBoxLayout()
-        frame1.addWidget(menubar)
-        frame1.addLayout(frame2)
-            
-       #self.trackingArea = QWidget(self)
-        self.createSideMenu()
+        self.mainTab.addTab(self.mapView, "Main")
+        self.mainTab.addTab(self.descriptionView, "Description")
         
-        self.setLayout(frame1)
+        self.sideTab.addTab(self.deviceTable, "Devices")
+        
+        self.splitter = QSplitter()
+        self.splitter.addWidget(self.mainTab)
+        self.splitter.addWidget(self.sideTab)
+        self.splitter.setSizes([600, 400])
+        self.setCentralWidget(self.splitter)
         
         # Creates box for raw data dump; show with showRSSI()
         self.RSSI = QWidget()
         self.RSSI.resize(300, 200)
         self.RSSI.setWindowTitle('RSSI')
         
-        
-
         self.rssi_plot = None # necessary?
         
-        self.add_device('0.0.0.0') #TEST
-    
-    #self.mainLoop()
-    def mainLoop(self):
-       print 'mainLoop'
-       cont=True
-       while cont==True:
-           print 'cont'
-           self.check_queue()
-           time.sleep(10)
-    
 
+    def createSideMenu(self):
+        tbl = QTableWidget(1, 4)
+        self.connect(tbl, SIGNAL("itemChanged(QTableWidgetItem*)"), self.handleDeviceTableClick)
+        
+        tbl.setHorizontalHeaderLabels(["", "BT Addr", "# Receivers", "Color"])
+        tbl.setColumnWidth(0, 27)
+        tbl.setColumnWidth(1, 150)
+        tbl.setColumnWidth(2, 90)
+        tbl.setColumnWidth(3, 50)
+        
+        return tbl
+    
+    def handleDeviceTableClick(self, item):
+        print str(item)
     
     def mapOpen(self): # Loads map in current tab
-    
         filename = QFileDialog.getOpenFileName(self, 'Open file')
-    
         
         tw = self.mainTab
         pmap = QPixmap(str(filename)).scaled(tw.size())
@@ -177,25 +157,15 @@ class MainApp (QWidget):
             mt.setTabText(mt.currentIndex(), str(newName[0]))
 
     def showRSSI(self):
-        
         self.RSSI.show()
         # TODO: pipe raw data to this window
 
-
-    def createSideMenu(self):
-        print "creating side menu"
-        tribe = self.sideTab.widget(0)
-        tribe.setHorizontalHeaderLabels(["track", "BD_ADDR", "#_RCVR", "COLOR"])
-        tribe.setColumnWidth(0, 40)
-        tribe.setColumnWidth(1, 100)
-        tribe.setColumnWidth(2, 45)
-        tribe.setColumnWidth(3, 50)
-
    
        
-       
+    ###################################   
     ##### DEVICE HANDLING METHODS #####
-     
+    ###################################
+    
     # Checks queue for new packets (?)
     def check_queue(self):
         try:
@@ -209,7 +179,7 @@ class MainApp (QWidget):
             pass
         self.mainTab.widget(0).update()
         
-            # self.root.after(config.POLL_PERIOD, self.check_queue) # FIXME
+    
     # adds necessary information for a new device (device_list, position_data)
     def handle_new_device(self, device_mac):
          print 'New device detected: %s' % device_mac
@@ -229,21 +199,33 @@ class MainApp (QWidget):
                 button.config(bg=result[1])
             return handle
 
-        row = len(self.device_list) + 1
+        row = len(self.device_list)
               
         ### Add new device in sidebar
-        tribe = self.sideTab.widget(0)
+        self.deviceTable.setRowCount(row+1)
         
-        checkbox = QCheckBox()
-        checkbox.setCheckState(True)
-        #tribe.setItem(row, 0, QTableWidgetItem(QCheckBox())) 
+        checkbox = QTableWidgetItem()
+        checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+        checkbox.setCheckState(Qt.Checked)
+        checkbox.setData(Qt.UserRole, device_mac)
+        
+        self.deviceTable.setItem(row, 0, checkbox)
         # TODO: set to emit signal readable by drawer?
         
-        tribe.setItem(row, 1, QTableWidgetItem(device_mac))
+        dmLabel = QTableWidgetItem(device_mac)
+        dmLabel.setFlags(Qt.ItemIsEnabled)
+        self.deviceTable.setItem(row, 1, dmLabel)
         
-        tribe.setItem(row, 2, QTableWidgetItem("#"))
+        nrLabel = QTableWidgetItem("#")
+        nrLabel.setFlags(Qt.ItemIsEnabled)
+        self.deviceTable.setItem(row, 2, nrLabel)
         
-        #tribe.setItem(row, 3, QColorDialog) # FIXME
+        cLabel = QTableWidgetItem("color")
+        cLabel.setBackground(QBrush(Qt.red))
+        cLabel.setFlags(Qt.ItemIsEnabled)
+        self.deviceTable.setItem(row, 3, cLabel)
+        
+
         # should be colored button that opens color dialog
         
         
@@ -282,6 +264,7 @@ class Map(QLabel):
         self.setPixmap(pm)
         self.m=main
         self.time=1
+    
     #def __init__(self, pathname, dList):
     #    QLabel.__init__()
         #self.setPixmap(QPixmap(pathname))
@@ -293,14 +276,13 @@ class Map(QLabel):
         painter.drawPixmap(10, 10, QPixmap('test-grid.gif'));
         self.drawPoints(painter)
         painter.end()
+    
     def drawPoints(self, qp):
         qp.setBrush(QColor(255, 0, 0, 80))
         qp.setPen(Qt.red)
         for device_mac in self.m.position_data.keys():
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
-                print str((x,y))
-                
                 qp.drawEllipse(x*400, y*400,5,5)
 
  
