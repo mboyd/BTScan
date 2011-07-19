@@ -133,9 +133,7 @@ class TrackingThread(multiprocessing.Process):
     
     def run(self):
         while True:
-            print 'Getting packet'
             packet = self.in_queue.get()
-            print 'Gotten'
             packet.position = self.method.get_position(packet)
             self.out_queue.put(packet)
 

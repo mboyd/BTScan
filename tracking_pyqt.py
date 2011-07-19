@@ -45,10 +45,6 @@ class MainApp (QWidget):
         history.setShortcut('Ctrl+h')
         history.setStatusTip('History')
         self.connect(history, SIGNAL('triggered()'), self.History)
-
-
-        
-     
        
         # Add new blank tab
         newTab = QAction('New Tab', self)
@@ -122,28 +118,15 @@ class MainApp (QWidget):
         self.RSSI.resize(300, 200)
         self.RSSI.setWindowTitle('RSSI')
         
-        
-
         self.rssi_plot = None # necessary?
         
         self.add_device('0.0.0.0') #TEST
     
-    #self.mainLoop()
-    def mainLoop(self):
-       print 'mainLoop'
-       cont=True
-       while cont==True:
-           print 'cont'
-           self.check_queue()
-           time.sleep(10)
-    
 
-    
     def mapOpen(self): # Loads map in current tab
     
         filename = QFileDialog.getOpenFileName(self, 'Open file')
     
-        
         tw = self.mainTab
         pmap = QPixmap(str(filename)).scaled(tw.size())
         
@@ -209,7 +192,6 @@ class MainApp (QWidget):
             pass
         self.mainTab.widget(0).update()
         
-            # self.root.after(config.POLL_PERIOD, self.check_queue) # FIXME
     # adds necessary information for a new device (device_list, position_data)
     def handle_new_device(self, device_mac):
          print 'New device detected: %s' % device_mac
@@ -282,9 +264,6 @@ class Map(QLabel):
         self.setPixmap(pm)
         self.m=main
         self.time=1
-    #def __init__(self, pathname, dList):
-    #    QLabel.__init__()
-        #self.setPixmap(QPixmap(pathname))
         
     #e: event
     def paintEvent(self, e):
@@ -293,6 +272,7 @@ class Map(QLabel):
         painter.drawPixmap(10, 10, QPixmap('test-grid.gif'));
         self.drawPoints(painter)
         painter.end()
+    
     def drawPoints(self, qp):
         qp.setBrush(QColor(255, 0, 0, 80))
         qp.setPen(Qt.red)
@@ -342,24 +322,22 @@ class Map(QLabel):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main = MainApp()
-    print 'Creating tracking pipeline'
+    
+    print 'Creating tracking pipeline...',
     s = scan_server.TrackingPipeline()
-    print 'Done'
     s.scan_server.add_new_device_callback(lambda dev: main.evt_queue.put(dev))
     s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
+    
+    #m = Mysql_logger.MysqlLogger()
+    #s.add_new_position_callback(lambda packet: m.log(packet))
+    print 'done'
+    
     main.show()
-    t=QTimer(main)
+    t = QTimer(main)
     main.connect(t, SIGNAL("timeout()"), main.check_queue)
     t.start(100)
 
-    print 'Running app...'
     sys.exit(app.exec_())
-    print 'done, exiting'
-
-
-
-    #m = Mysql_logger.MysqlLogger()
-    #s.add_new_position_callback(lambda packet: m.log(packet))
 
         
         

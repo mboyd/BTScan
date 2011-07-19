@@ -42,7 +42,6 @@ class NLMaPTracker(TrackingMethod):
         self.convergence = .8
 
     def get_position(self, p):
-	print 'Pre-Processing latency: %f sec' % (time.time() - p.timestamp[0])
             
         distance = self.range_estimator.get_range(p.rssi)
         
@@ -81,7 +80,6 @@ class NLMaPTracker(TrackingMethod):
         m = NLMaP.MultiLateration(x, y, z, d, s, len(self.receiver_buffer.keys()))
         pos = m.GetPosition(self.iterations, self.delta, self.convergence)
 	#print 'Processing latency: %f sec' % (time.time() - p.timestamp[0])
-        print 'NLMaPTracker returning position: %s' % str((pos.x, pos.y))
         return (pos.x, pos.y)
         
     
