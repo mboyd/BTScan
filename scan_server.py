@@ -16,25 +16,31 @@ class ScanListener(threading.Thread):
         threading.Thread.__init__(self)
         self.daemon = True
         
+        self.addr = addr
+        self.port = port
+        
         self.callbacks = []
         if open:
             self.open()
         
     def open(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((addr, port))
+        self.sock.bind((self.addr, self.port))
         
     def add_callback(self, callback):
         self.callbacks.append(callback)
 
     def decode_packet(self, data):
         try:
-            fields = struct.unpack('qqBBBBBBBBBBBBbxxx', data)
+            print 'Packet (len %s): %s' % (len(data), [ord(x) for x in data])
+            fields = struct.unpack('!LLBBBBBBBBBBBBb', data)
             tstamp_sec, tstamp_usec = fields[0:2]
             receiver_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[2:8]])
-            device_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[8:14]])
+            device_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[13:7:-1]])  # Yes, the bluetooth address comes over backwards
             rssi = fields[14]
-            return data_packet.DataPacket((tstamp_sec, tstamp_usec), receiver_mac, device_mac, rssi)
+            p = data_packet.DataPacket((tstamp_sec, tstamp_usec), receiver_mac, device_mac, rssi)
+            print p
+            return p
         except Exception, e:
             print 'Malformed packet (%s); dropped' % str(e)
 
@@ -71,10 +77,12 @@ class ScanServer(object):
     """
     
     def __init__(self, *args, **kwargs):
-        if "fakeit" in kwargs:
+        if "fakeit" in kwargs and kwargs["fakeit"]:
             self.listener = FakeListener()
         else:
+            del kwargs['fakeit']
             self.listener = ScanListener(*args, **kwargs)
+        
         self.listener.add_callback(self.process_packet)
         
         self.devices = []
@@ -143,8 +151,8 @@ class TrackingPipeline(object):
         c(device, new_pos)
     """
     
-    def __init__(self):
-        self.scan_server = ScanServer(fakeit=True)
+    def __init__(self, fakeit=True):
+        self.scan_server = ScanServer(fakeit=fakeit)
         self.tracking_threads = dict()
         self.new_position_callbacks = []
         

@@ -343,14 +343,18 @@ class SceneMap(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    
-    s = scan_server.TrackingPipeline()
+    if config.USE_FAKE_DATA:
+        s = scan_server.TrackingPipeline(fakeit=True)
+    else:
+        s = scan_server.TrackingPipeline(fakeit=False)
+        
     main = MainApp(s)
     s.scan_server.add_new_device_callback(lambda dev: main.evt_queue.put(dev))
     s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
     
-    #m = Mysql_logger.MysqlLogger()
-    #s.add_new_position_callback(lambda packet: m.log(packet))
+    if config.USE_MYSQL_LOGGING:
+        m = Mysql_logger.MysqlLogger()
+        s.add_new_position_callback(lambda packet: m.log(packet))
     
     main.show()
     t = QTimer(main)
