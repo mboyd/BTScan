@@ -46,6 +46,11 @@ class NLMaPTracker(TrackingMethod):
             
         distance = self.range_estimator.get_range(p.rssi)
         
+        if not p.receiver_mac in self.receiver_buffer:
+            print "[NLMaPTracker for %s]: Packet from unknown receiver %s; dropped" % \
+                    (self.receiver_mac, p.receiver_mac)
+            return (0, 0)
+        
         self.receiver_buffer[p.receiver_mac][0].append((p.timestamp, distance))
 
         for receiver_mac in self.receiver_buffer.keys():
@@ -82,6 +87,9 @@ class NLMaPTracker(TrackingMethod):
             m = NLMaP.MultiLateration(x, y, z, d, s, len(self.receiver_buffer.keys()))
             pos = m.GetPosition(self.iterations, self.delta, self.convergence)
         except:
+            # FIXME: NLMaP failures (C++ exceptions) currently don't translate to 
+            # python exceptions, but instead crash the process.  scan_server
+            # currently revives dead TrackingThreads, but we need a better solution.
             print 'Modelling failure, continuing...'
             pos = (0, 0)
 	    #print 'Processing latency: %f sec' % (time.time() - p.timestamp[0])
