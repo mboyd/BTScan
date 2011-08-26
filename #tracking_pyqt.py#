@@ -4,7 +4,7 @@
 
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-import scan_server, config, data_packet, Mysql_logger, rssi_plot
+import scan_server, config, data_packet, Mysql_logger
 from PIL import Image
 from collections import deque
 import sys, time, Queue, random
@@ -85,7 +85,7 @@ class MainApp (QMainWindow):
         self.deviceTable = self.createSideMenu()
 
         self.mainTab.addTab(self.mapView, "Main")
-        self.mainTab.addTab(self.descriptionView, "Secondary")
+        self.mainTab.addTab(self.descriptionView, "Description")
         
         self.sideTab.addTab(self.deviceTable, "Devices")
         
@@ -96,7 +96,9 @@ class MainApp (QMainWindow):
         self.setCentralWidget(self.splitter)
         
         # Creates box for raw data dump; show with showRSSI()
-        self.RSSI = rssi_plot.RSSIPlot('mac1')
+        self.RSSI = QWidget()
+        self.RSSI.resize(300, 200)
+        self.RSSI.setWindowTitle('RSSI')
 
     def createSideMenu(self):
         tbl = QTableWidget(1, 4)
@@ -114,10 +116,9 @@ class MainApp (QMainWindow):
     def handleItemChanged(self, item):
         data = str(item.data(Qt.UserRole).toString())
         if data:
-            if not 'isCheckBox' in item.__dict__:  # FIXME: other half of sketchy checkbox hack
+            if item.checkState() == 0:
                 return      # Not a checkbox
             state = (item.checkState() == 2)
-            print 'New tracking state for %s : %s' % (data, state)
             self.device_list[data][0] = state
     
     def handleDeviceTableClick(self, row, col):
@@ -213,7 +214,6 @@ class MainApp (QMainWindow):
         self.deviceTable.setRowCount(row+1)
         
         checkbox = QTableWidgetItem()
-        checkbox.isCheckBox = True  # FIXME: Sketchy hack to help event handler
         checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
         checkbox.setCheckState(Qt.Checked)
         checkbox.setData(Qt.UserRole, device_mac)
@@ -250,8 +250,6 @@ class MainApp (QMainWindow):
         self.packet_buf = self.position_data[packet.device_mac]
         self.packet_buf.append(packet)
         
-        self.RSSI.plot_point(packet)
-        
         while len(self.packet_buf) > self.Hlength:
             
             self.packet_buf.popleft()
@@ -265,7 +263,7 @@ class Map(QLabel):
     # dList
     def __init__ (self, main, image):
         super(Map, self).__init__()
-        self.m=main
+	self.m=main
         self.pm = QPixmap(image).scaled(self.m.mainTab.size())
         self.setPixmap(self.pm)
         self.time=1

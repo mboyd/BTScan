@@ -32,7 +32,7 @@ class ScanListener(threading.Thread):
 
     def decode_packet(self, data):
         try:
-            print 'Packet (len %s): %s' % (len(data), [ord(x) for x in data])
+            #print 'Packet (len %s): %s' % (len(data), [ord(x) for x in data])
             fields = struct.unpack('!LLBBBBBBBBBBBBb', data)
             tstamp_sec, tstamp_usec = fields[0:2]
             receiver_mac = ':'.join([hex(f)[2:].zfill(2) for f in fields[2:8]])

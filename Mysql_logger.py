@@ -8,7 +8,7 @@ class MysqlLogger(object):
 
     def log(self, p):
         x, y = p.position
-        print 'Logging position: %f, %f' % (x, y)
+        
         
         SQL = "INSERT INTO BluetoothTB1 " + \
             "(timestamp, receiver_mac, device_mac, rssi, x_pos, y_pos)" + \

@@ -42,7 +42,10 @@ class NLMaPTracker(TrackingMethod):
         self.convergence = .8
 
     def get_position(self, p):
-	    #print 'Pre-Processing latency: %f sec' % (time.time() - p.timestamp[0])
+        #print 'Pre-Processing latency: %f sec' % (time.time() - p.timestamp[0])
+        
+        if not config.USE_FAKE_DATA:
+            return (0, 0)
             
         distance = self.range_estimator.get_range(p.rssi)
         
@@ -92,7 +95,7 @@ class NLMaPTracker(TrackingMethod):
             # currently revives dead TrackingThreads, but we need a better solution.
             print 'Modelling failure, continuing...'
             pos = (0, 0)
-	    #print 'Processing latency: %f sec' % (time.time() - p.timestamp[0])
+        #print 'Processing latency: %f sec' % (time.time() - p.timestamp[0])
         return (pos.x, pos.y)
         
     
