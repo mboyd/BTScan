@@ -61,11 +61,12 @@ unsigned char mac_address[6];
 #define MAX_DELAY    2000
 
 struct status_packet {
-  struct timeval timestamp;
+  uint32_t timestamp_sec;
+  uint32_t timestamp_usec;
   uint8_t host_mac_addr[6];
   uint8_t device_bt_addr[6];
   int8_t rssi;
-};
+} __attribute__((__packed__));
 
 void usage(char *name)
 {
@@ -87,13 +88,22 @@ static void sig_term(int sig)
 
 static void show_inquiry_result(bdaddr_t *bdaddr, int8_t rssi)
 {
+  struct timeval time;
   struct status_packet pkt;
+  int i;
+
+  memset(&pkt, 0, sizeof(pkt));
   
-  memcpy(pkt.host_mac_addr, mac_address, sizeof(pkt.host_mac_addr));
-  memcpy(pkt.device_bt_addr, bdaddr, sizeof(bdaddr));
-  gettimeofday(&pkt.timestamp, NULL);
+  for (i = 0; i < 6; i++) {
+    pkt.host_mac_addr[i] = (uint8_t) mac_address[i];
+    pkt.device_bt_addr[i] = (uint8_t) bdaddr->b[i];	// For some reason, bdaddr->b is backwards
+  }
+
+  gettimeofday(&time, NULL);
+  pkt.timestamp_sec = htonl((uint32_t) time.tv_sec);
+  pkt.timestamp_usec = htonl((uint32_t) time.tv_usec);
   
-  pkt.rssi = rssi;    // If no rssi available, this becomes INT_MIN
+  pkt.rssi = rssi;
   
   sendto(sock, (void *)(&pkt), sizeof(pkt), 0, (const struct sockaddr *)&srv_addr, sizeof(pkt));
   
@@ -112,6 +122,7 @@ static void inquiry_result(int dd, unsigned char *buf, int len)
   for (i = 0; i < num; i++) {
     info = (void *) buf + (sizeof(*info) * i) + 1;
     //show_inquiry_result(&info->bdaddr, INT_MIN);  // Surpress results w/o rssi
+    fprintf(stderr, "_");
   }
 }
 
@@ -135,11 +146,11 @@ static void inquiry_result_with_rssi(int dd, unsigned char *buf, int len)
 static void activate_rssi(int dd)
 {
   write_inquiry_mode_cp cp;
-  uint8_t err;
+  int err;
 
   cp.mode = 1;
-    err = hci_send_cmd(dd, OGF_HOST_CTL, OCF_WRITE_INQUIRY_MODE, WRITE_INQUIRY_MODE_RP_SIZE, &cp);
-  if (debug) fprintf(stderr,"activate_rssi: err=%X\n",err);
+  err = hci_send_cmd(dd, OGF_HOST_CTL, OCF_WRITE_INQUIRY_MODE, WRITE_INQUIRY_MODE_RP_SIZE, &cp);
+  if (debug) fprintf(stderr,"activate_rssi: err=%d\n",err);
   /* No other error checking, since this may fail and we don't care. */
 }
 

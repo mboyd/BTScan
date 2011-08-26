@@ -12,7 +12,8 @@ import pickle
 
 class MainApp (QMainWindow):
     
-    def __init__(self):
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
         # Variables
         self.device_list = dict() #contains tracking_state, color, row, listed by MAC
         self.position_data = dict()
@@ -101,7 +102,8 @@ class MainApp (QMainWindow):
 
     def createSideMenu(self):
         tbl = QTableWidget(1, 4)
-        self.connect(tbl, SIGNAL("itemChanged(QTableWidgetItem*)"), self.handleDeviceTableClick)
+        self.connect(tbl, SIGNAL("itemChanged(QTableWidgetItem*)"), self.handleItemChanged)
+        self.connect(tbl, SIGNAL("cellClicked(int, int)"), self.handleDeviceTableClick)
         
         tbl.setHorizontalHeaderLabels(["", "BT Addr", "# Receivers", "Color"])
         tbl.setColumnWidth(0, 27)
@@ -111,25 +113,37 @@ class MainApp (QMainWindow):
         
         return tbl
     
-    def handleDeviceTableClick(self, item):
+    def handleItemChanged(self, item):
         data = str(item.data(Qt.UserRole).toString())
         if data:
+            if item.checkState() == 0:
+                return      # Not a checkbox
             state = (item.checkState() == 2)
             self.device_list[data][0] = state
     
+    def handleDeviceTableClick(self, row, col):
+        if col == 3:
+            item = self.deviceTable.item(row, col)
+            dev = str(item.data(Qt.UserRole).toString())
+            color = QColorDialog.getColor()
+            item.setBackground(QBrush(color))
+            self.device_list[dev][1] = color
+
+    
     def mapOpen(self): # Loads map in current tab
-     filename = QFileDialog.getOpenFileName(self, 'Open file')
-     f=open(filename).readline()
-
-     fp=f.rstrip()
-     fp=fp.strip('\'')+'.p'
-     execfile(filename.__str__())
-     building=pickle.load(open (fp))
-     for floor in building.floors:
-	    newTab=Map(self, floor.file_name)
-            self.addTab(floor.name, floor.file_name)
-
+        filename = QFileDialog.getOpenFileName(self, 'Open file')
+        f=open(filename).readline()
         
+        fp=f.rstrip()
+        fp=fp.strip('\'')+'.p'
+        execfile(filename.__str__())
+        building=pickle.load(open(fp))
+        
+        for floor in building.floors:
+            newTab = Map(self, floor.file_name)
+            self.addTab(floor.name, floor.file_name)
+    
+    
     def History(self):
         length = QInputDialog.getInt(self, "Tracking History",
                                       "Please input the history length", value=5,
@@ -137,6 +151,7 @@ class MainApp (QMainWindow):
         self.Hlength = length
 
     def closeEvent(self, event):
+        self.pipeline.shutdown()
         event.accept()
     
     def addTab(self, name, image):
@@ -188,16 +203,7 @@ class MainApp (QMainWindow):
    
      # Adds new device being tracked to side frame
     def add_device(self, device_mac):
-                    
-        def mk_button_handler(button, color):
-            def handle():
-                # FIXME
-                #result = tkColorChooser.askcolor()
-                QColorDialog.getColor(Qt_red, self)
-                color[:] = list(result[1])
-                button.config(bg=result[1])
-            return handle
-
+    
         row = len(self.device_list)
         color = Qt.red
         
@@ -213,7 +219,6 @@ class MainApp (QMainWindow):
         checkbox.setData(Qt.UserRole, device_mac)
         
         self.deviceTable.setItem(row, 0, checkbox)
-        # TODO: set to emit signal readable by drawer?
         
         dmLabel = QTableWidgetItem(device_mac)
         dmLabel.setFlags(Qt.ItemIsEnabled)
@@ -226,6 +231,7 @@ class MainApp (QMainWindow):
         cLabel = QTableWidgetItem("")
         cLabel.setBackground(QBrush(color))
         cLabel.setFlags(Qt.ItemIsEnabled)
+        cLabel.setData(Qt.UserRole, device_mac)
         self.deviceTable.setItem(row, 3, cLabel)
        
 
@@ -271,12 +277,34 @@ class Map(QLabel):
         painter.end()
     
     def drawPoints(self, qp):
-        qp.setBrush(QColor(255, 0, 0, 80))
-        qp.setPen(Qt.red)
+
         for device_mac in self.m.position_data.keys():
+            if not self.m.device_list[device_mac][0]:
+                continue
+            
+            color = self.m.device_list[device_mac][1]
+            qp.setBrush(color)
+            qp.setPen(color)
+            
             for packet in self.m.position_data[device_mac]:
                 x,y = packet.position
                 qp.drawEllipse(x*self.width(), y*self.height(),5,5)
+                
+class SceneMap(QWidget):
+    """Higher-performance map implementation.  Work in progress."""
+    
+    def __init__(self, main, image):
+        super(QWidget, self).__init__()
+        self.m = main
+        self.pm = QGraphicsPixmap(QPixmap(image).scaled(self.m.mainTab.size()))
+        self.setPixmap(self.pm)
+        self.time = 1
+        layout = QVBoxLayout()
+        self.scene = QGraphicsScene()
+        layout.addItem(self.scene)
+        self.setLayout(layout)
+    
+
 
 #file options dialog to define map dimensions
 # TODO: adapt to PyQt
@@ -314,14 +342,19 @@ class Map(QLabel):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    main = MainApp()
-    
-    s = scan_server.TrackingPipeline()
+
+    if config.USE_FAKE_DATA:
+        s = scan_server.TrackingPipeline(fakeit=True)
+    else:
+        s = scan_server.TrackingPipeline(fakeit=False)
+        
+    main = MainApp(s)
     s.scan_server.add_new_device_callback(lambda dev: main.evt_queue.put(dev))
     s.add_new_position_callback(lambda packet: main.evt_queue.put(packet))
     
-    #m = Mysql_logger.MysqlLogger()
-    #s.add_new_position_callback(lambda packet: m.log(packet))
+    if config.USE_MYSQL_LOGGING:
+        m = Mysql_logger.MysqlLogger()
+        s.add_new_position_callback(lambda packet: m.log(packet))
     
     main.show()
     t = QTimer(main)
